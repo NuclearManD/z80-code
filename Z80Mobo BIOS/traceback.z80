@@ -1,0 +1,136 @@
+; traceback.z80
+; tracing errors
+ERRORS:
+	.OTHER: equ 0
+	.DRIVE_ERROR: equ 1
+ERR_MSG:
+	.pipe_read_error: db "Pipe Read Error",13,"Attempt to read from empty pipe.",0
+	.drive_error: db "Drive Error",0
+	.other_error: db "Undef. Error",0
+os_setup_tracer:
+	ld hl, catch_stack
+	ld (catch_sp), hl
+	ret
+try:
+	push hl
+	push de
+	push bc
+	ld (tmp_sp), sp
+	ld sp, (catch_sp)
+	push hl
+	ld (catch_sp), sp
+	ld sp, (tmp_sp)
+	pop bc
+	pop de
+	pop hl
+	ret
+notry:
+	push hl
+	push de
+	push bc
+	ld (tmp_sp), sp
+	ld sp, (catch_sp)
+	pop hl
+	ld (catch_sp), sp
+	ld sp, (tmp_sp)
+	pop bc
+	pop de
+	pop hl
+	ret
+throw_pipe_read_error:
+	ld hl, ERR_MSG.pipe_read_error
+	call println
+	jp throw
+throw_drive_error:
+	ld hl, ERR_MSG.drive_error
+	call println
+throw:
+	ld (tmp_sp), sp
+	ld hl, (catch_sp)
+	ld bc, catch_stack
+	scf
+	ccf
+	sbc hl, bc
+	jp z, system_error
+	ld sp, (catch_sp)
+	pop hl
+	ld (catch_sp), sp
+	ld sp, (tmp_sp)
+	jp (hl)
+traceback:
+	push hl
+	push de
+	push bc
+	ld hl, .sp_msg
+	call print
+	ld hl, 0
+	scf
+	ccf
+	sbc hl, sp
+	srl h
+	rr l
+	call int_to_hex
+	call println
+	
+	ld hl, .traceback_msg
+	call println
+	ld (tmp_sp), sp
+.read_stack:
+	pop hl			; Find and print code loc.
+	push hl
+	ld (tmp_sp2), sp
+	ld sp, (tmp_sp)
+	call int_to_hex
+	call print
+	ld sp,(tmp_sp2)
+	pop hl
+	
+	ld c, 20
+	
+	dec hl			; get end of string
+	dec hl
+	dec hl
+	dec hl
+	dec hl
+.seek_loop:
+	ld a, (hl)
+	or a
+	jp z, .out
+	cp 46
+	jp c, .next
+	cp 123
+	jp nc, .next
+	dec hl
+	dec c
+	xor a
+	cp c
+	jp z, .next
+	jp .seek_loop
+.out:
+	ld (tmp_sp2), sp
+	ld sp, (tmp_sp)
+	ld a, ':'
+	call chrout
+	inc hl
+	call print ; do the newline somewhere else in case .next is jp'ed to.
+	ld sp,(tmp_sp2)
+.next:
+	ld (tmp_sp2), sp
+	ld sp, (tmp_sp)
+	ld a, 13
+	call chrout
+	ld sp,(tmp_sp2)
+	
+	ld hl, 1
+	add hl, sp
+	jp c, .done
+	jp .read_stack
+.done:
+	ld sp, (tmp_sp)
+	pop bc
+	pop de
+	pop hl
+	ret
+.end_trace: db "End of Traceback.",0
+.traceback_msg: db "Traceback (most recent call first) :",0
+.sp_msg: db "Stack depth:",0

@@ -1,0 +1,116 @@
+NFS_setup:
+	push hl
+	push de
+	push bc
+	ld hl, fs_s0
+	ld bc, 0
+	ld de, 0
+	jp .e1
+	db "NFS_setup:e1"
+.e1:
+	call ide_load
+	pop bc
+	pop de
+	pop hl
+	ret
+ls_files:
+	push de		; save current de
+	ld hl, 0
+	call alloc	; get where the string is going
+	ex de, hl
+	push de 	; and push it so we return it in hl
+	push bc
+	ld hl, fs_tmps
+	ld bc, 1
+	ld de, 0
+	jp .e1
+	db 0,"ls_files.e1",0
+.e1:
+	call ide_load
+	ld hl, fs_tmps
+.loop:
+	xor a
+	cp (hl)
+	jp z, .done
+	ld bc, 16
+	add hl, bc
+	ld a, (hl)
+	and 1
+	scf
+	ccf
+	sbc hl, bc
+	
+	push hl
+	call len
+	ld h, b
+	ld l, c
+	inc hl
+	cp 1
+	jp z, .nodir ; compare a from earlier, which contains 1 if it is a directory.
+	inc hl		 ; we will add a '/' later, allocate accordingly.
+.nodir:
+	call alloc
+	ld d, h
+	ld e, l
+	pop hl
+	
+	push hl
+	ldir
+	cp 1
+	jp z, .nodir2	; again not a directory
+	ld a, '/'
+	ld (de), a
+	inc de
+.nodir2:
+	ld a, ','
+	ld (de), a
+	pop hl
+	ld a, 32
+	add h
+	ld h, a
+	jp .loop
+.done:
+	pop bc
+	pop hl
+	pop de
+	ret
+
+
+format:
+	push hl
+	push bc
+	push de
+	ld de, fs_s0
+	ld hl, .raw_image1
+	ld bc, 16
+	ldir
+	ld de, 0
+	ld bc, 0
+	ld hl, fs_s0
+	call ide_store
+	ld hl, fs_tmps
+	ld bc, 512
+	xor a
+.clr_lopen:
+	ld (hl), a
+	inc hl
+	dec bc
+	ld a, b
+	or c
+	jp nz, .clr_lopen
+
+	ld de, 0
+	ld bc, 1
+	ld hl, fs_tmps
+	call ide_store
+	
+	pop de
+	pop bc
+	pop hl
+.raw_image1:
+		db 0xC3, 0,0
+		dw 1
+		dw 4
+		dw 0
+		db "NFS100",0
+

@@ -1,0 +1,211 @@
+; ObjectUtils 1711171200
+
+list:
+	.len:		equ 0
+	.maxlen:	equ 2
+	.data:		equ 4
+; de is list and hl is element to append
+	.append:
+		push bc
+		push de
+		ex de, hl
+		; now de is element to append and hl is list
+		push de
+		
+		ld c, (hl)
+		inc hl
+		ld b, (hl)
+		inc hl
+		ld e, (hl)
+		inc hl
+		ld d, (hl)
+		inc hl
+		ex de, hl
+		; hl is list length and de is .data pointer
+		; element is on the stack
+		or a
+		sbc hl, bc
+		jp z, .realloc
+	._exit_pt:
+		ex de, hl
+		pop de
+		; de is element and hl is list data
+		push hl
+		ld h, b
+		ld l, c
+		add hl, bc
+		ld b, h
+		ld c, l
+		pop hl
+		; hl now has pointer to new element
+		ld (hl), e
+		inc hl
+		ld (hl), d
+		
+		pop de
+		push de
+		ex de, hl
+		inc (hl)
+		jp nc, .done
+		inc hl
+		inc (hl)
+	.done:
+		pop de
+		pop bc
+		ret
+	;.realloc:
+		db 0,"list.append",0
+	.realloc:
+		call throw
+	; give element pos. in bc and list in hl
+	; element returned in de
+	.get:
+		push bc
+		push hl
+		ld de, .data
+		add hl, de
+		
+		push hl
+		ld h, b
+		ld l, c
+		add hl, bc
+		ld b, h
+		ld c, l
+		pop hl
+		
+		add hl, bc
+		
+		ld e, (hl)
+		inc hl
+		ld d, (hl)
+		
+		pop hl
+		pop bc
+		ret
+; pipes are ways to transfer data to/from a hardware device. Can be a UART, keyboard, terminal, etc.
+; pipe objects should only be created by device drivers.
+_pipe_structure:
+	._size: equ 16
+	.properties: equ 0
+	.readfunc: equ 1
+	.writefunc: equ 4
+	.availfunc: equ 7
+	.printfunc: equ 10
+	.printlnfunc: equ 13
+; abstract class pipe
+; every function takes hl as the pipe object.
+pipe:
+	.size: equ _pipe_structure._size
+	;db "pipe.read",0
+	; returns byte in A
+	.read:
+		push bc
+		push hl
+		ld (current_pipe), hl
+		ld bc, _pipe_structure.readfunc
+		add hl, bc
+		ld bc, .ret
+		push bc
+		jp (hl)
+	; string in de
+	;db "pipe.print", 0
+	.print:
+		push bc
+		push hl
+		ld (current_pipe), hl
+		ld bc, _pipe_structure.printfunc
+		add hl, bc
+		ld bc, .ret
+		push bc
+		jp (hl)
+	; string in de
+	;db "pipe.println", 0
+	.println:
+		push bc
+		push hl
+		ld (current_pipe), hl
+		ld bc, _pipe_structure.printlnfunc
+		add hl, bc
+		ld bc, .ret
+		push bc
+		jp (hl)
+	; byte to send in A
+	;db "pipe.write", 0
+	.write:
+		push bc
+		push hl
+		ld (current_pipe), hl
+		ld bc, _pipe_structure.writefunc
+		add hl, bc
+		ld bc, .ret
+		push bc
+		jp (hl)
+	; returns 1 if yes, 0 if no.
+	;db "pipe.available", 0
+	.available:
+		push bc
+		push hl
+		ld (current_pipe), hl
+		ld bc, _pipe_structure.availfunc
+		add hl, bc
+		ld bc, .ret
+		push bc
+		jp (hl)
+	.ret:
+		pop hl
+		pop bc
+		ret
+	.this: ; return the current object
+		ld hl, (current_pipe)
+		ret
+; block devices are things like hard drives, SSDs, flash storage, RAM disks, etc.  Mass data storage.  Typically 256 byte sectors for this machine.
+; block device objects should only be created by device drivers.
+_bd_structure:
+	._size: equ 10
+	.properties: equ 0
+	.readfunc: equ 1
+	.writefunc: equ 4
+	.setadrfunc: equ 7
+; abstract class blockdevice
+; every function takes hl as the pipe object, and de as the argument.
+blockdevice:
+	.size: equ _bd_structure._size
+	; reads a sector into memory at pointer de.
+	.read:
+		push bc
+		push hl
+		ld (current_bd), hl
+		ld bc, _bd_structure.readfunc
+		add hl, bc
+		ld bc, .ret
+		push bc
+		jp (hl)
+	; write a sector into memory from pointer de
+	.write:
+		push bc
+		push hl
+		ld (current_bd), hl
+		ld bc, _bd_structure.writefunc
+		add hl, bc
+		ld bc, .ret
+		push bc
+		jp (hl)
+	; sets the block device address bits (8..23), address in de
+	; allows addressing of up to 16 MB of storage
+	.set_address:
+		push bc
+		push hl
+		ld (current_bd), hl
+		ld bc, _bd_structure.setadrfunc
+		add hl, bc
+		ld bc, .ret
+		push bc
+		jp (hl)
+	.ret:
+		pop hl
+		pop bc
+		ret
+	.this: ; return the current object
+		ld hl, (current_bd)
+		ret
+		

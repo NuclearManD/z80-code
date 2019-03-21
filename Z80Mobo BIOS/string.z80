@@ -1,0 +1,146 @@
+strcomp: 
+	push de
+	push hl
+.strcomp_l: 
+    ld a,(de) 
+    cp (hl) 
+    jp nz, .strcret    ;nz means they are not equal 
+    inc hl 
+    inc de 
+    or a       ;set the z flag if they're equal
+    jp nz, .strcomp_l
+.strcret:
+	pop hl
+	pop de
+	ret
+div16:
+	srl a
+	srl a
+	srl a
+	srl a
+	ret
+hex_table:
+db "0123456789ABCDEF",0
+; int_to_hex - convert HL into hex string
+int_to_hex:
+	push de
+	ex de, hl
+	ld hl, $8800;5
+	;call alloc
+	push hl
+	ld a, d
+	call .div16
+	ld (hl), a
+	inc hl
+	ld a, d
+	call .and15
+	ld (hl), a
+	inc hl
+	ld a, e
+	
+	call .div16
+	ld (hl), a
+	inc hl
+	ld a, e
+	call .and15
+	ld (hl), a
+	inc hl
+	ld a, 0
+	ld (hl), 0
+	pop hl
+	pop de
+	ret
+.div16:
+	srl a
+	srl a
+	srl a
+	srl a
+.and15:
+	and 15
+	push hl
+	push de
+	ld hl, hex_table
+	ld d, 0
+	ld e, a
+	add hl, de
+	ld a, (hl)
+	pop de
+	pop hl
+	ret
+; byte_to_hex - convert A into hex string
+byte_to_hex:
+	ex de, hl
+	ld hl, $8800;3
+	;call alloc
+	push hl
+	push af
+	call .c1
+	ld (hl), a
+	inc hl
+	pop af
+	call .c2
+	ld (hl), a
+	inc hl
+	ld (hl),0
+	pop hl
+	ret
+.c1:
+	rra
+	rra
+	rra
+	rra
+.c2:
+	or $F0
+	daa
+	add a, $A0
+	adc a, $40 ; Ascii hex at this point (0 to F)   
+	ret
+hex_to_byte:
+	push hl
+	push bc
+	call .sub
+	sla a
+	sla a
+	sla a
+	sla a
+	ld b, a
+	inc hl
+	call .sub
+	or b
+	pop bc
+	pop hl
+	ret
+.sub:
+	ld a, (hl)
+	sub 87
+	jr nc, .n
+	add 39
+.n:
+	ret
+; uint16_t hex_to_int(uint8_t* hl)->de
+hex_to_int:
+	push hl
+	call hex_to_byte
+	ld d, a
+	inc hl
+	inc hl
+	call hex_to_byte
+	ld e, a
+	pop hl
+	ret
+; len - get string length in bc
+len:
+	push de
+	push hl
+	ld a, 0
+	cpir
+	pop de
+	or a
+	sbc hl, de 
+	ld b, h
+	ld c, l
+	ld h, d
+	ld l, e
+	pop de
+	ret
+	

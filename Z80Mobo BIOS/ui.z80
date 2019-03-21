@@ -1,0 +1,141 @@
+; ui.z80 : user interface tools and functions, 1711150917
+
+; print without newline
+print:
+	push de
+	push hl
+	ld d, h
+	ld e, l
+	ld hl, (term_outpipe)
+	call pipe.print
+	pop hl
+	pop de
+	ret
+; print with newline
+println:
+	push de
+	push hl
+	ld d, h
+	ld e, l
+	ld hl, (term_outpipe)
+	call pipe.println
+	pop hl
+	pop de
+	ret
+; read from terminal, wait if none yet available
+chrin:
+	push hl
+	ld hl, (term_inpipe)
+.retry:
+	call pipe.available
+	or a
+	jp z, .retry
+	jr .clutch
+db 0, "chrin.clutch", 0
+.clutch:
+	call pipe.read
+	pop hl
+	ret
+; write character to terminal
+chrout:
+	push hl
+	ld hl, (term_outpipe)
+	call pipe.write
+	pop hl
+	ret
+; read a line from the terminal
+input:
+	push hl
+.lopen:
+	call chrin
+	cp 8
+	jp z, .delete
+	out (0), a
+	cp 13
+	jp z, .done
+	ld (hl), a
+	inc hl
+	jp .lopen
+.delete:
+	dec hl
+	ld a, 8
+	call chrout
+	ld a, ' '
+	call chrout
+	ld a, 8
+	call chrout
+	jr .lopen
+.done:
+	xor a
+	ld (hl), a
+	pop hl
+	ret
+
+print_memory:
+	push hl
+	push de
+	push bc
+	ld a, l
+	and $F0		; ensure that it is the beginning
+	ld l, a
+	ld a, ' '
+	call chrout
+	call chrout
+	call chrout
+	call chrout
+	ld a, '|'
+	call chrout
+	push hl
+	ld hl, hex_table
+.write_head:
+	ld a, (hl)
+	or a
+	jr z, .write_done
+	inc hl
+	call chrout
+	ld a, ' '
+	call chrout
+	call chrout
+	jp .write_head
+.write_done:
+	ld a, 13
+	call chrout
+	ld c, free_text_rows-1 ; number of rows to output
+	pop hl
+.row_start:
+	push hl
+	ld a, h
+	call byte_to_hex
+	call print
+	pop hl
+	push hl
+	ld a, l
+	call byte_to_hex
+	call print
+	ld a, '|'
+	call chrout
+	pop hl
+.row_loop:
+	ld a, (hl)
+	push hl
+	call byte_to_hex
+	call print
+	ld a, ' '
+	call chrout
+	pop hl
+	inc hl
+	ld a, l
+	and $F
+	jp nz, .row_loop
+	
+	ld a, 13
+	call chrout
+	dec c
+	ld a, c
+	or a
+	jp nz, .row_start
+	pop bc
+	pop de
+	pop hl
+	ret
+	

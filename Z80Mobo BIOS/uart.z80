@@ -1,0 +1,122 @@
+; _uart_send - send A to UART
+_uart_send:
+	push af
+.s:
+	in a, (5)
+	and a, 32
+	jr z, .s
+	pop af
+	out (0), a
+	ret
+; _uart_print - hl points to data to send
+_uart_print:
+	push af
+	push hl
+.loop:
+	ld a, (hl)
+	or a
+	jp z, .done
+	call _uart_send
+	inc hl
+	jr .loop
+.done:
+	pop hl
+	pop af
+	ret
+
+; _uart_println - hl points to string to print
+
+_uart_println:
+	call _uart_print
+	ld a, 13
+	call _uart_send
+	ret
+; _uart_rec - waits for UART to be available, then returns a byte
+_uart_rec:
+	in a, (5)
+	bit 0, a
+	jp z, _uart_rec
+	in a, (0)
+	ret
+
+; _uart_avail - returns 0 if uart doesn't have a byte
+_uart_avail:
+	in a, (5)
+	and a, 1
+	ret
+
+; _uart_read - reads a byte from uart, throws if none available.
+_uart_read:
+	in a, (5)
+	bit 0, a
+	jp z, .error
+	in a, (0)
+	ret
+db 0,"_uart_read",0
+.error:
+	call throw_pipe_read_error
+
+; returns a pipe object pointer for the UART
+_uart_setup:
+	; Hardware (UART) setup if using 18.43MHz clock
+	ld a, $80 
+	out (3), a			; SET DLAB
+	ld a, 10			; 115200 baud
+	out (0), a
+	ld a, 0
+	out (1), a        
+	ld a, 3
+	out (3), a          ; 8-bit serial, RESET DLAB
+	ld a, 1
+	out (2), a          ; enable FIFOs
+	
+	ld a, 0
+	call _uart_send
+	ld hl, uart_pipe_obj
+	ret
+
+; input_uart - receive string from UART and store it in HL
+uart_input:
+	push hl
+.lopen:
+	call _uart_rec
+	cp 8
+	jp z, .delete
+	out (0), a
+	cp 13
+	jp z, .done
+	ld (hl), a
+	inc hl
+	jp .lopen
+.delete:
+	dec hl
+	ld a, 8
+	call _uart_send
+	ld a, ' '
+	call _uart_send
+	ld a, 8
+	call _uart_send
+	jr .lopen
+.done:
+	xor a
+	ld (hl), a
+	pop hl
+	ret
+	
+_pipe_uart_println:
+	ld h, d
+	ld l, e
+	jp _uart_println
+	
+_pipe_uart_print:
+	ld h, d
+	ld l, e
+	jp _uart_print
+
+uart_pipe_obj:
+	db $00 ; normal pipe has 00 properties.
+	jp _uart_read
+	jp _uart_send
+	jp _uart_avail
+	jp _pipe_uart_print
+	jp _pipe_uart_println

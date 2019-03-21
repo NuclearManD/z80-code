@@ -1,0 +1,37 @@
+; alloc - allocate hl bytes of memory, hl returns its address.
+
+alloc:
+	push de
+	ex de, hl ; save allocation size, we will need it
+	
+	ld hl, (heap_top)
+	ld a, h
+	or $80
+	ld h, a
+	push hl  ;  Heap top is new memory space, so save it
+	
+	add hl, de
+	ld (heap_top), hl ; add to heap_top
+	
+	pop hl
+	pop de
+	ret
+
+bytes_free:
+	push de
+	ld de, (heap_top)
+	ld hl, 0
+	add hl, sp
+	or a
+	sbc hl, de
+	pop de
+	ret
+rm_last:
+	ret
+memory_init:
+	push hl
+	ld hl, $A300
+	ld (heap_top),hl
+	pop hl
+	ret
+	

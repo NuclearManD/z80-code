@@ -1,0 +1,246 @@
+; pipeserver.z80 - driver for the pipeserver card and handles the list of pipes.
+; pipeserver cards also provide block devices with 256 byte sectors.  This file handles those block devices too.
+
+pipeserver_port: equ $90
+
+cmd_read_sector: equ $10
+cmd_write_sector: equ $20
+cmd_set_adr: equ $30
+
+; set up the pipe list
+init_pipe_list:
+	push hl
+	
+	ld hl, 2 ; twice the number of pipes on init
+	ld (pipe_list_cnt), hl
+	
+	; add uart to pipe list
+	ld hl, uart_pipe_obj
+	ld (pipe_list), hl
+	
+	pop hl
+	ret
+; set up block device list
+init_bd_list:
+	push hl
+	
+	ld hl, 0 ; twice the number of block devices on init
+	ld (bd_list_cnt), hl
+	
+	pop hl
+	ret
+
+; add a pipe (hl) to the list
+add_pipe_to_list:
+	push bc
+	push hl
+	
+	push hl ; get list parameters loaded
+	ld hl, pipe_list
+	ld bc, (pipe_list_cnt)
+	add hl, bc
+	
+	inc bc ; add to pipe list
+	inc bc
+	ld (pipe_list_cnt), bc
+	
+	pop bc ; save value in list
+	ld (hl), c
+	inc hl
+	ld  (hl), b
+	
+	pop hl
+	pop bc
+	ret
+	
+; add a block device (hl) to the list
+add_bd_to_list:
+	push bc
+	push hl
+	
+	push hl ; get list parameters loaded
+	ld hl, bd_list
+	ld bc, (bd_list_cnt)
+	add hl, bc
+	
+	inc bc ; add to block device list
+	inc bc
+	ld (bd_list_cnt), bc
+	
+	pop bc ; save value in list
+	ld (hl), c
+	inc hl
+	ld  (hl), b
+	
+	pop hl
+	pop bc
+	ret
+
+; setup pipeserver card
+pipeserver_setup:
+	push bc
+	push hl
+	
+	ld hl, 0
+	ld (main_disk), hl ; make the main drive null to prevent use (not yet initialized - usage would crash BIOS)
+	
+	; first check that the pipeserver is even installed on the machine
+	in a, (pipeserver_port+3) ; device count (shouldn't be more than 64, and can't be zero)
+	push af
+	rla
+	rla
+	and 3
+	jp nz, .not_installed
+	ld hl, .devcnt_msg
+	call print
+	pop af
+	push af
+	call byte_to_hex
+	call println
+	pop af
+	or a
+	jp z, .not_installed
+	
+	; cool, it's installed.  Now lets go through the devices.
+	ld c, a
+.device_loop:
+	dec c
+	ld a, c
+	out (pipeserver_port), a ; set device to current
+	in a, (pipeserver_port)  ; get status so we can check if it's a pipe
+	and 1
+	jp z, .next;.block_device
+	
+	; it's a pipe, create an object and add it to the list.
+	ld a, c
+	call pipeserver_new
+	call add_pipe_to_list
+	ld hl, .pipe_discovered_msg
+	call print
+	ld a, c
+	call byte_to_hex
+	call println
+.next:
+	; is that all of the devices?
+	ld a, c
+	or a
+	jp nz, .device_loop
+	
+	pop hl
+	pop bc
+	ret
+;.block_device:
+;	; it's a block device, create an object and add it to the list.
+;	ld a, c
+;	call psblockdev_new
+;	call add_bd_to_list
+;	ld hl, .bd_discovered_msg
+;	call print
+;	ld a, c
+;	call byte_to_hex
+;	call println
+;	jp .next
+.not_installed:
+	ld hl, .not_installed_msg
+	call println
+	pop hl
+	pop bc
+	ret
+.not_installed_msg: db "Warning: Pipeserver card was not found.",0
+.pipe_discovered_msg: db "Pipe found, id=",0
+.bd_discovered_msg: db "Block Device found, id=",0
+.devcnt_msg: db "Pipeserver card found, num devices=", 0
+
+; print a string to the pipeserver object
+_pipeserver_print:
+	call pipe.this
+	push de
+	ld a, (hl)
+	out (pipeserver_port), a
+.loop:
+	ld a, (de)
+	or a
+	jp z, .done
+	out (pipeserver_port+1), a
+	inc de
+	jp .loop
+.done:
+	pop de
+	ret
+	
+	
+; print a string to the pipeserver object and then send a newline
+_pipeserver_println:
+	call _pipeserver_print
+	ld a, 13
+	call _pipeserver_write
+	ret
+
+; write a byte to the pipeserver object at hl
+_pipeserver_write:
+	push af
+	call pipe.this
+	ld a, (hl)
+	out (pipeserver_port), a ; set device id
+	pop af
+	out (pipeserver_port+1), a ; send data
+	ret
+
+; check for available bytes at the pipeserver object at hl. 1 if available, zero otherwise.
+_pipeserver_avail:
+	call pipe.this
+	ld a, (hl)
+	out (pipeserver_port), a ; set device id
+	in a, (pipeserver_port)  ; read status register
+	and 2
+	rra
+	ret
+
+; read a byte from the pipeserver object at hl.  Throws if none available.
+_pipeserver_read:
+	call _pipeserver_avail ; this will set the correct device ID
+	or a
+	jp z, .error
+	in a, (pipeserver_port+1)
+	ret
+db 0, "_pipeserver_read",0
+.error:
+	call throw_pipe_read_error
+
+pipeserver_pipe_obj_base:
+	jp _pipeserver_read
+	jp _pipeserver_write
+	jp _pipeserver_avail
+	jp _pipeserver_print
+	jp _pipeserver_println
+; put pipe ID in A, memory allocated automatically, returns object in hl
+pipeserver_new:
+	push de
+	push bc
+	push af
+	
+	ld hl, 16
+	call alloc
+	pop af
+	ld (hl), a ; save ID number
+	
+	push hl ; copy object base into memory
+	inc hl
+	ex de, hl
+	ld hl, pipeserver_pipe_obj_base
+	ld bc, 15
+	ldir
+	
+	; make sure to clean the input buffer, pipe servers can leave input across reboots.
+	pop hl
+.clean_loop:
+	call pipe.available
+	or a
+	jp z, .done
+	call pipe.read
+	jp .clean_loop
+.done:
+	pop bc
+	pop de
+	ret
+	

@@ -1,0 +1,214 @@
+;  Origionally from some old OS design I made.
+; Then became MinOS
+; Kernel reused in NTIOS 0.1
+; Kernel heavily modified NTIOS 0.2
+; @1903191502 Rewritten to be a BIOS instead
+; Copyright Dylan Brophy 2017
+;
+org $0000
+; CONFIGURATION
+
+reboot: equ bios_start
+
+stack_top:     equ $FFFF
+text_rows:		equ 20
+free_text_rows:	equ text_rows-3
+
+vectors:
+	jp bios_start ; 0000 (reboot)
+	jp print    ; 0003
+	jp println  ; 0006
+	jp alloc    ; 0009
+	jp 0;delete   000C
+	jp strcomp  ; 000F
+	jp 0;input    ; 0012
+	jp 0000     ; 0015
+	jp 0000;endpgm   ; 0018
+	
+	jp 0000     ; 001B
+	jp 0000     ; 001E
+	jp 0000     ; 0021
+	jp 0000     ; 0024
+	nop
+	jp 0000     ; 0028
+	jp 0000     ; 002B
+	jp 0000     ; 002E
+	jp 0000     ; 0031
+	jp 0000     ; 0034
+nop             ; 0037
+int38:          ; 0038, Z80 interrupt mode 1 vector
+	push hl
+	push af
+	push de
+	push bc
+	push ix
+	push iy
+	;jp 55 ; lol
+	
+	pop iy
+	pop ix
+	pop bc
+	pop de
+	pop af
+	pop hl
+	reti
+bios_start:
+	di
+	ld sp, stack_top
+	ld hl, 0
+	
+	call memory_init
+	
+	call _uart_setup
+	ld (term_inpipe), hl
+	ld (term_outpipe), hl
+	
+	ld hl, .loadmsg
+	call println
+	
+	call os_setup_tracer
+	call init_pipe_list
+	call init_bd_list
+	call pipeserver_setup
+	
+	; system should be completely set up at this point.
+	
+	ld hl, .donemsg
+	call println
+	ld de, .donemsg
+	ld hl, ($810A)
+	call pipe.println
+	
+	;ld hl, (pipe_list_cnt)
+	;ld bc, 2
+	;scf
+	;ccf
+	;sbc hl, bc
+	;ld hl, pipe_list
+	;jp z, .found_terminal ; don't ask to activate if there is only one pipe anyway
+	
+	; allow user to select a terminal by iterating through pipes and
+	; sending a login to each, then see which responds first.
+	ld de, .rqaccessmsg
+	ld hl, pipe_list_cnt
+	ld c, (hl)
+	ld hl, pipe_list
+.rq_access_loop:
+	push hl
+	call int_to_hex
+	call _uart_print ; debug
+	ld a, '<'
+	call _uart_send
+	pop hl
+	push hl
+	ld a, (hl)
+	inc hl
+	ld h, (hl)
+	ld l, a
+	call int_to_hex
+	call _uart_println ; debug
+	pop hl
+	call pipe.println
+	dec c
+	dec c
+	jp z, .did_rq
+	inc hl
+	inc hl
+	jp .rq_access_loop
+.did_rq:
+	ld hl, .testmsg
+	call _uart_println
+	; sent message, now just iterate through looking for a response.
+	ld hl, pipe_list_cnt
+	ld c, (hl)
+	ld hl, pipe_list
+.check_avail_loop:
+	call pipe.available
+	or a
+	jp nz, .found_terminal
+	dec c
+	dec c
+	jp z, .did_rq ; if we looped through all and none are available, try again.  Forever.  Because one day SOMEONE WILL PRESS DAT KEY!!!
+	inc hl
+	inc hl
+	jp .check_avail_loop
+.found_terminal:
+	ld (term_inpipe), hl
+	ld (term_outpipe), hl
+	
+	ld hl, .termactmsg
+	call println
+	
+	halt
+	
+.loadmsg: db "Loading BIOS...",0
+.donemsg: db "Done!", 0
+.rqaccessmsg: db "Press any key to activate this terminal.",0
+.termactmsg: db "Terminal Activated.", 0
+.testmsg: db "[Test Message]", 0
+	
+system_error:
+	ld hl, bios_broken
+	call try
+	
+	ld hl, $8000
+	call print_memory
+	ld hl, $8100
+	call print_memory
+	ld hl, $8200
+	call print_memory
+	call traceback
+	ld a, 13
+	call chrout
+	ld hl, .msg
+	call println
+	call input
+	jp 0
+.msg: db "Computer will not recover, press enter to reboot.", 0
+bios_broken:
+	ld hl, .emergency
+	call try
+	
+	ld hl, uart_pipe_obj ; switch back to UART pipe, in case it fixes the terminal (if that's even what's wrong...)
+	ld (term_outpipe), hl
+	ld (term_inpipe), hl
+	
+	ld hl, $8000
+	call print_memory
+	ld hl, $8100
+	call print_memory
+	ld hl, $a300
+	call print_memory
+	
+	call traceback
+.emergency:
+	ld hl, .msg
+	call _uart_println ; in case terminal IO is doomed
+	halt
+.msg: db "Serious BIOS Error.  Please reflash the bios and force reboot of machine.", 0
+INCLUDE "string.z80"
+INCLUDE "objutil.z80"
+INCLUDE "uart.z80"
+INCLUDE "memory.z80"
+INCLUDE "ui.z80"
+INCLUDE "traceback.z80"
+INCLUDE "pipeserver.z80"
+
+heap_top:		equ $8002
+tmp:			equ $8004
+term_inpipe:	equ $8006
+term_outpipe:	equ $8008
+current_pipe:	equ $800A
+catch_stack:	equ $8105
+tmp_sp:			equ $8106
+tmp_sp2:		equ $8108
+catch_sp:		equ $8108
+pipe_list_cnt:	equ $810A
+pipe_list:		equ $810C
+current_bd:		equ $8200 ; bd stands for Block Device
+bd_list_cnt:	equ $8202
+bd_list:		equ $8204
+main_disk:		equ $8240
+
+
+BIOS_END:
