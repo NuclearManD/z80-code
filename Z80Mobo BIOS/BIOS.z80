@@ -117,6 +117,10 @@ bios_start:
 	inc hl
 	jp .check_avail_loop
 .found_terminal:
+	ld a, (hl)
+	inc hl
+	ld h, (hl)
+	ld l, a
 	ld (term_inpipe), hl
 	ld (term_outpipe), hl
 	ld a, (pipe_list_cnt)
