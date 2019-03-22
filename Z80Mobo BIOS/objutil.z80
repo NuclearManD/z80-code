@@ -155,6 +155,15 @@ pipe:
 		pop hl
 		pop bc
 		ret
+	; reads and dumps all available input from the pipe
+	.clean:
+		call pipe.available
+		jr nz, .clean_clutch
+		ret
+	db "pipe.clean"
+	.clean_clutch:
+		call pipe.read
+		jr .clean
 	.this: ; return the current object
 		ld hl, (current_pipe)
 		ret

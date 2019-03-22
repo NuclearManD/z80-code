@@ -73,20 +73,7 @@ bios_start:
 	
 	; system should be completely set up at this point.
 	
-	ld hl, .donemsg
-	call println
-	ld de, .donemsg
-	ld hl, ($810A)
-	call pipe.println
-	
-	;ld hl, (pipe_list_cnt)
-	;ld bc, 2
-	;scf
-	;ccf
-	;sbc hl, bc
-	;ld hl, pipe_list
-	;jp z, .found_terminal ; don't ask to activate if there is only one pipe anyway
-	
+
 	; allow user to select a terminal by iterating through pipes and
 	; sending a login to each, then see which responds first.
 	ld de, .rqaccessmsg
@@ -95,20 +82,13 @@ bios_start:
 	ld hl, pipe_list
 .rq_access_loop:
 	push hl
-	call int_to_hex
-	call _uart_print ; debug
-	ld a, '<'
-	call _uart_send
-	pop hl
-	push hl
 	ld a, (hl)
 	inc hl
 	ld h, (hl)
 	ld l, a
-	call int_to_hex
-	call _uart_println ; debug
-	pop hl
 	call pipe.println
+	call pipe.clean
+	pop hl
 	dec c
 	dec c
 	jp z, .did_rq
@@ -116,14 +96,18 @@ bios_start:
 	inc hl
 	jp .rq_access_loop
 .did_rq:
-	ld hl, .testmsg
-	call _uart_println
 	; sent message, now just iterate through looking for a response.
 	ld hl, pipe_list_cnt
 	ld c, (hl)
 	ld hl, pipe_list
 .check_avail_loop:
+	push hl
+	ld a, (hl)
+	inc hl
+	ld h, (hl)
+	ld l, a
 	call pipe.available
+	pop hl
 	or a
 	jp nz, .found_terminal
 	dec c
@@ -135,17 +119,50 @@ bios_start:
 .found_terminal:
 	ld (term_inpipe), hl
 	ld (term_outpipe), hl
-	
+	ld a, (pipe_list_cnt)
+	sub c
+	rra
+	and $1F
+	call byte_to_hex
+	ld d, h
+	ld e, l
+	ld hl, pipe_list_cnt
+	ld c, (hl)
+	ld hl, pipe_list
+.term_selected_loop:
+	push hl
+	ld a, (hl)
+	inc hl
+	ld h, (hl)
+	ld l, a
+	push de
+	ld de, .termselmsg
+	call pipe.println
+	pop de
+	call pipe.println
+	pop hl
+	dec c
+	dec c
+	jp z, .term_selected
+	inc hl
+	inc hl
+	jp .term_selected_loop
+.term_selected:
 	ld hl, .termactmsg
+	call println
+	ld hl, .lookingfordrivesmsg
 	call println
 	
 	halt
-	
+.testmsg: db "[Test Message]", 0
 .loadmsg: db "Loading BIOS...",0
 .donemsg: db "Done!", 0
+	
 .rqaccessmsg: db "Press any key to activate this terminal.",0
 .termactmsg: db "Terminal Activated.", 0
-.testmsg: db "[Test Message]", 0
+.termselmsg: db "Terminal was activated: ", 0
+
+.lookingfordrivesmsg: db "Checking disks...",0
 	
 system_error:
 	ld hl, bios_broken
