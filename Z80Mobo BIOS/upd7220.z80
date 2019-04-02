@@ -1,0 +1,63 @@
+wr_upd7220:
+	push bc
+	push af
+	
+.lopen:
+	nop    ; wait a few us for the upd7220 to think
+	nop
+	nop
+	nop
+	in a, ($80)
+	and 2
+	jp nz, .lopen
+	
+	ld b, 0
+	ld a, c
+	or $80
+	ld c, a
+	pop af
+	out (c), a
+	pop bc
+	ret
+
+upd7220_setup:
+	ld c, 1
+	xor a
+	call wr_upd7220
+	dec c
+	ld a, $12
+	call wr_upd7220
+	ld a, $26
+	call wr_upd7220
+	ld a, $4C
+	call wr_upd7220
+	ld a, $24
+	call wr_upd7220
+	ld a, $06
+	call wr_upd7220
+	ld a, $14
+	call wr_upd7220
+	ld a, $7C
+	call wr_upd7220
+	ld a, $71
+	call wr_upd7220
+	inc c
+	ld a, $0D
+	call wr_upd7220
+	ld a, $6F
+	call wr_upd7220
+	ld a, $70
+	call wr_upd7220
+	dec c
+	ld a, $00
+	call wr_upd7220
+	call wr_upd7220
+	ld a, $C0
+	call wr_upd7220
+	ld a, $17
+	call wr_upd7220
+	inc c
+	ld a, $6B
+	call wr_upd7220
+	ret
+	

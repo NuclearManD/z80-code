@@ -157,10 +157,21 @@ bios_start:
 	ld hl, .lookingfordrivesmsg
 	call println
 	
+	call upd7220_setup
+	
+.ioloop:
+	
+	
 	halt
+
+
+
 .testmsg: db "[Test Message]", 0
 .loadmsg: db "Loading BIOS...",0
 .donemsg: db "Done!", 0
+
+.adrmsg: db "adr> ", 0
+.datmsg: db "dat> ", 0
 	
 .rqaccessmsg: db "Press any key to activate this terminal.",0
 .termactmsg: db "Terminal Activated.", 0
@@ -214,6 +225,7 @@ INCLUDE "memory.z80"
 INCLUDE "ui.z80"
 INCLUDE "traceback.z80"
 INCLUDE "pipeserver.z80"
+INCLUDE "upd7220.z80"
 
 heap_top:		equ $8002
 tmp:			equ $8004
