@@ -29,23 +29,27 @@ upd7220_setup:
 	call wr_upd7220
 	ld a, $26
 	call wr_upd7220
-	ld a, $4C
+	ld a, $86
 	call wr_upd7220
-	ld a, $24
+	ld a, $74
 	call wr_upd7220
-	ld a, $06
+	ld a, $04
 	call wr_upd7220
-	ld a, $14
+	ld a, $0A
 	call wr_upd7220
 	ld a, $7C
 	call wr_upd7220
-	ld a, $71
+	ld a, $49
 	call wr_upd7220
 	inc c
-	ld a, $0D
-	call wr_upd7220
 	ld a, $6F
 	call wr_upd7220
+	ld a, $47
+	call wr_upd7220
+	dec c
+	ld a, $28
+	call wr_upd7220
+	inc c
 	ld a, $70
 	call wr_upd7220
 	dec c
@@ -57,7 +61,24 @@ upd7220_setup:
 	ld a, $17
 	call wr_upd7220
 	inc c
+	ld a, $4B
+	call wr_upd7220
+	dec c
+	ld a, $00
+	call wr_upd7220
+	ld a, $c0
+	call wr_upd7220
+	
+	inc c
+	ld a, $46		; set zoom to 1 and graphics character/fill zoom to 1
+	call wr_upd7220
+	dec c
+	ld a, $00
+	call wr_upd7220
+	
+	inc c
 	ld a, $6B
 	call wr_upd7220
+	
 	ret
 	

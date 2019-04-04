@@ -159,8 +159,42 @@ bios_start:
 	
 	call upd7220_setup
 	
-.ioloop:
+	ld hl, 128
+	call alloc ; allocate 128 bytes on the heap for keyboard input
+	push hl
 	
+.ioloop:
+	ld hl, .adrmsg
+	call print
+	
+	pop hl
+	call input
+	call hex_to_byte
+	ld b, 0
+	ld c, a
+	
+	push hl
+	ld hl, .datmsg
+	call print
+	
+	pop hl
+	call input
+	push hl
+	xor a
+	cp (hl)
+	jp z, .io_read
+	call hex_to_byte
+	
+	out (c), a
+	jp .ioloop
+
+.io_read:
+	in a, (c)
+	pop hl
+	call byte_to_hex
+	push hl
+	call println
+	jp .ioloop
 	
 	halt
 
@@ -226,6 +260,7 @@ INCLUDE "ui.z80"
 INCLUDE "traceback.z80"
 INCLUDE "pipeserver.z80"
 INCLUDE "upd7220.z80"
+empty_str: db 0
 
 heap_top:		equ $8002
 tmp:			equ $8004
