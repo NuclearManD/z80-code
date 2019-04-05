@@ -1,0 +1,205 @@
+include "header.z80"
+
+org boot
+
+VRAM_WORDS: equ 19200
+
+_entry:
+	ld hl, .setup_gfx
+	call println
+	call upd7220_setup
+	ld a, r
+	ld h, a
+	ld l, $39
+	call gfx_fill
+	ret
+.setup_gfx: db "Setting up graphics...", 0
+
+wr_upd7220:
+	push bc
+	push af
+	
+.lopen:
+	nop    ; wait a few us for the upd7220 to think
+	nop
+	nop
+	nop
+	in a, ($80)
+	and 2
+	jp nz, .lopen
+	
+	ld b, 0
+	ld a, c
+	or $80
+	ld c, a
+	pop af
+	out (c), a
+	pop bc
+	ret
+
+upd7220_setup: ; 240x320 (yes, more vertical pixels.)  for 8Mhz clock.
+	ld c, 1
+	xor a
+	call wr_upd7220
+	dec c
+	ld a, $10
+	call wr_upd7220
+	ld a, $3A
+	call wr_upd7220
+	ld a, $86
+	call wr_upd7220
+	ld a, $24
+	call wr_upd7220
+	ld a, $04
+	call wr_upd7220
+	ld a, $3F
+	call wr_upd7220
+	ld a, $40
+	call wr_upd7220
+	ld a, $5D
+	call wr_upd7220
+	inc c
+	ld a, $6F
+	call wr_upd7220
+	ld a, $47
+	call wr_upd7220
+	dec c
+	ld a, $3C
+	call wr_upd7220
+	inc c
+	ld a, $70
+	call wr_upd7220
+	dec c
+	ld a, $00
+	call wr_upd7220
+	call wr_upd7220
+	ld a, $C0
+	call wr_upd7220
+	ld a, $14
+	call wr_upd7220
+	inc c
+	ld a, $4B
+	call wr_upd7220
+	dec c
+	ld a, $00
+	call wr_upd7220
+	ld a, $c0
+	call wr_upd7220
+	
+	inc c
+	ld a, $46		; set zoom to 1 and graphics character/fill zoom to 1
+	call wr_upd7220
+	dec c
+	ld a, $00
+	call wr_upd7220
+	
+	inc c
+	ld a, $6B
+	call wr_upd7220
+	
+	ret
+	
+gfx_curs: ; set cursor position (hl is word)
+	push bc
+	
+	ld c, 1
+	ld a, $49
+	call wr_upd7220
+	dec c
+	ld a, l
+	call wr_upd7220
+	ld a, h
+	call wr_upd7220
+	xor a
+	call wr_upd7220
+	
+	pop bc
+	ret
+	
+gfx_mask: ; set mask (hl is mask)
+	push bc
+	
+	ld c, 1
+	ld a, $4A
+	call wr_upd7220
+	dec c
+	ld a, l
+	call wr_upd7220
+	ld a, h
+	call wr_upd7220
+	
+	pop bc
+	ret
+	
+gfx_fill: ; pattern in hl
+	push de
+	push bc
+	push hl
+	ld hl, 0
+	call gfx_curs
+	
+	dec hl ; 0-1 = $FFFF
+	call gfx_mask
+	
+	pop hl ; get back our pattern
+	
+	; set up figure parameters
+	ld a, $4C
+	ld c, 1
+	call wr_upd7220
+	dec c
+	ld a, $02
+	call wr_upd7220
+	ld de, $3FFF
+	ld a, e
+	call wr_upd7220
+	ld a, d
+	call wr_upd7220
+	
+	; write pattern
+	inc c
+	ld a, $20
+	call wr_upd7220
+	dec c
+	ld a, l
+	call wr_upd7220
+	ld a, h
+	call wr_upd7220
+	
+	; subtract to get remaining words
+	
+	push hl
+	ld hl, VRAM_WORDS - 1
+	scf
+	ccf
+	sbc hl, de
+	ex de, hl
+	pop hl
+	
+	; set up figure parameters again
+	ld a, $4C
+	ld c, 1
+	call wr_upd7220
+	dec c
+	ld a, $02
+	call wr_upd7220
+	ld a, e
+	call wr_upd7220
+	ld a, d
+	call wr_upd7220
+	
+	; write pattern
+	inc c
+	ld a, $20
+	call wr_upd7220
+	dec c
+	ld a, l
+	call wr_upd7220
+	ld a, h
+	call wr_upd7220
+	
+	pop bc
+	pop de
+	ret
+	
+	

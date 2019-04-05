@@ -1,0 +1,22 @@
+reboot:				equ $0000
+print:				equ $0003
+println:			equ $0006
+alloc:				equ $0009
+input:				equ $000C
+strcomp:			equ $000F
+chrin:				equ $0012
+chrout:				equ $0015
+print_memory:		equ $0018
+	
+try:				equ $001B
+notry:				equ $001E
+throw:				equ $0021
+traceback:			equ $0024
+len:				equ $0028
+blockdevice.read:	equ $002B
+blockdevice.write:	equ $002E
+blockdevice.set_address: equ $0031
+yield:				equ $0038 ; Z80 interrupt mode 1 vector
+
+
+boot:	equ $9000 ; where the BIOS loads the OS

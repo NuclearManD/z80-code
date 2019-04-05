@@ -1,5 +1,4 @@
 CMD_LOAD256:	equ $05
-CMD_LOAD1024:	equ $06
 CMD_REBOOT:		equ $01
 CMD_CALL:		equ $80
 CMD_WR_BOOT:	equ $C0
@@ -10,8 +9,8 @@ load_loc:		equ bootsector_loc
 
 
 flash_pgm:
-	ld hl, mem_idx
-	ld (hl), load_loc
+	ld hl, load_loc
+	ld (mem_idx), hl
 .mainloop:
 	call chrin ; get input
 	
@@ -20,9 +19,6 @@ flash_pgm:
 	
 	cp CMD_LOAD256
 	jp z, .load256
-	
-	cp CMD_LOAD1024
-	jp z, .load1024
 	
 	cp CMD_CALL
 	jp z, .call
@@ -37,13 +33,36 @@ flash_pgm:
 	ld c, 0
 	ld de, (mem_idx)
 .ldlopen: ; 'lopen' means 'loop'
+	push bc
 	call chrin
 	ld (de), a
 	inc de
-	inc c
+	pop bc
+	dec c
 	
-	jp nc, .ldlopen
+	jp nz, .ldlopen
 	
 	; loaded 256 bytes.  Now save the loading pointer.
 	ld (mem_idx), de
 	jp .mainloop
+.call:
+	call load_loc
+	jp .mainloop
+.wrboot:
+	ld a, (bd_list_cnt)
+	or a
+	jp z, .error
+	
+	ld de, 0
+	ld hl, (main_disk)
+	call blockdevice.set_address
+	
+	ld de, load_loc
+	call blockdevice.write
+	
+	jp .mainloop
+.error:
+	ld a, 'e'
+	call chrout
+	jp .mainloop
+

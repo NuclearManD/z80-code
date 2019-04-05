@@ -92,7 +92,7 @@ bios_start:
 	ld hl, .flashmsg
 	call println
 	
-	;call flash_pgm
+	call flash_pgm
 	
 	halt
 .no_disk:
@@ -275,6 +275,7 @@ INCLUDE "ui.z80"
 INCLUDE "traceback.z80"
 INCLUDE "pipeserver.z80"
 INCLUDE "upd7220.z80"
+INCLUDE "flash.z80"
 empty_str: db 0
 
 heap_top:		equ $8002
