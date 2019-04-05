@@ -9,80 +9,27 @@ _entry:
 	ld hl, $0000 ; fill screen with black
 	call gfx_fill
 	
-	ld b, 0
-.lop:
-	ld a, b
-	call gfx_wchr
-	inc b
-	ld a, $80
-	cp b
-	jp nz, .lop
+	call set_pipes
 	
-	ret
+	ld hl, .rdy_msg
+	call println
+.loop:
+	call chrin
+	cp '`'
+	jp z, .exit
+	call chrout
+	jp .loop
+.exit:
+	jp 0 ; reboot
 .setup_gfx: db "Setting up graphics...", 0
-	
-hex_table:
-db "0123456789ABCDEF",0
-; int_to_hex - convert HL into hex string
-int_to_hex:
-	;call speed_on
-	push de
-	ex de, hl
-	ld hl, $8800;5
-	;call alloc
-	push hl
-	ld a, d
-	call .div16
-	ld (hl), a
-	inc hl
-	ld a, d
-	call .and15
-	ld (hl), a
-	inc hl
-	ld a, e
-	
-	call .div16
-	ld (hl), a
-	inc hl
-	ld a, e
-	call .and15
-	ld (hl), a
-	inc hl
-	ld a, 0
-	ld (hl), 0
-	pop hl
-	pop de
-	ret
-.div16:
-	srl a
-	srl a
-	srl a
-	srl a
-.and15:
-	and 15
-	push hl
-	push de
-	ld hl, hex_table
-	ld d, 0
-	ld e, a
-	add hl, de
-	ld a, (hl)
-	pop de
-	pop hl
-	call speed_off
-	ret
-	
-speed_on: ; activates the auxillary clock.  BE CAREFUL WITH THIS.  Cannot use BIOS, ROM, or any IO when this clock is activated.
-	push af
-	ld a, 1
-	out ($30), a
-	pop af
-	ret
-speed_off: ; deactivates the auxillary clock.
-	push af
-	xor a
-	out ($30), a
-	pop af
-	ret
+.rdy_msg:	db "Ready!  Keyboard active.", 0
+
 include "upd7220.z80"
 include "math.z80"
+
+set_pipes:
+	ld hl, gfx_pipe_obj ; gfx_pipe_obj can also be the keyboard
+	ld (term_outpipe), hl
+	ld (term_inpipe), hl
+	ret
+	

@@ -1,4 +1,5 @@
 
+pipeserver_port: equ $90	; for reading from the keyboard
 
 VRAM_WORDS: equ 19200
 
@@ -365,6 +366,17 @@ gfx_advance_cursor:
 	jp nc, gfx_newline
 	ld (text_cursor_x), a
 	ret
+	
+gfx_indent:
+	ld a, (text_cursor_x)
+	and 0x7C
+	cp maximum_x
+	
+	jp z, gfx_newline
+	jp nc, gfx_newline
+	add 4					; 4 spaces
+	ld (text_cursor_x), a
+	ret
 
 gfx_newline:
 	ld a, (text_cursor_y)
@@ -383,4 +395,70 @@ gfx_wait_ready:
 	jp nz, .ready_loop
 	pop af
 	ret
-	
+
+gfx_chr:
+	cp $0D
+	jp z, gfx_newline
+	cp $09
+	jp z, gfx_indent
+	cp $08
+	jp z, .backspace
+	jp gfx_wchr
+.backspace:
+	ld a, (text_cursor_x)
+	or a
+	jp z, .chline
+	dec a
+	ld (text_cursor_x), a
+	push af
+	ld a, $20 ; write a space
+	call gfx_wchr
+	pop af
+	ld (text_cursor_x), a
+	ret
+.chline:
+	ld a, (text_cursor_y)
+	dec a
+	ld (text_cursor_y), a
+	ret
+
+gfx_print:				; string in de
+	push de
+.lop:
+	ld a, (de)
+	or a
+	jp z, .done
+	inc de
+	call gfx_chr
+	jp .lop
+.done:
+	pop de
+	ret
+gfx_println:			; string in de
+	call gfx_print
+	call gfx_newline
+gfx_pipe_available:
+	ld a, 1					; keyboard ID
+	out (pipeserver_port), a ; set device id
+	in a, (pipeserver_port)  ; read status register
+	and 2
+	rra
+	ret
+gfx_pipe_read:
+	call gfx_pipe_available ; this will set the correct device ID
+	or a
+	jp z, .err
+	in a, (pipeserver_port+1)
+	ret
+db 0, "gfx_pipe_read", 0
+.err:
+	call throw
+	ret ; how would it return?  Idk, just in case.
+
+gfx_pipe_obj:
+	db $00 ; normal pipe has 00 properties.
+	jp gfx_pipe_read
+	jp gfx_chr
+	jp gfx_pipe_available
+	jp gfx_print
+	jp gfx_println
