@@ -14,6 +14,8 @@ _entry:
 	ld a, b
 	call gfx_wchr
 	inc b
+	ld a, $80
+	cp b
 	jp nz, .lop
 	
 	ret

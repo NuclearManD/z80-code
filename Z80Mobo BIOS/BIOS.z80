@@ -15,28 +15,32 @@ BOOT_MAGIC: equ $6579
 stack_top:     equ $FFFF
 
 vectors:
-	jp bios_start ; 0000 (reboot)
-	jp print    ; 0003
-	jp println  ; 0006
-	jp alloc    ; 0009
-	jp input	; 000C
-	jp strcomp  ; 000F
-	jp chrin	; 0012
-	jp chrout	; 0015
-	jp print_memory; 0018
+	jp bios_start	; 0000 (reboot)
+	jp print		; 0003
+	jp println		; 0006
+	jp alloc		; 0009
+	jp input		; 000C
+	jp strcomp  	; 000F
+	jp chrin		; 0012
+	jp chrout		; 0015
+	jp print_memory	; 0018
 	
-	jp try		; 001B
-	jp notry	; 001E
-	jp throw	; 0021
-	jp traceback; 0024
+	jp try			; 001B
+	jp notry		; 001E
+	jp throw		; 0021
+	jp traceback	; 0024
 	nop
-	jp len		; 0028
+	jp len			; 0028
 	jp blockdevice.read     ; 002B
 	jp blockdevice.write     ; 002E
 	jp blockdevice.set_address     ; 0031
-	jp 0000     ; 0034
-	nop			; 0037
-	jp yield	; 0038, Z80 interrupt mode 1 vector
+	jp int_to_hex	; 0034
+	nop				; 0037
+	jp yield		; 0038, Z80 interrupt mode 1 vector
+	jp hex_to_int	; 003B
+	jp byte_to_hex	; 003E
+	jp hex_to_byte	; 0041
+	
 
 bios_start:
 	di

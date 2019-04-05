@@ -1,3 +1,49 @@
+
+
+VRAM_WORDS: equ 19200
+
+font_ptr: equ $4000
+horiz_words: equ 60
+
+text_cursor_x: db 0
+text_cursor_y: db 0
+
+maximum_x: equ horiz_words/2 - 1
+
+gfx_text_curs_to_word: ; uses text_cursor value
+	push bc
+	push de
+
+	ld a, (text_cursor_y) ; multiply y value by 8 and store in de
+	rlca
+	rlca
+	rlca
+	push af
+	and $F8
+	ld l, a
+	pop af
+	and $07
+	ld h, a
+	ld d, 0
+	ld a, (text_cursor_y)
+	ld e, a
+	add hl, de
+	ex de, hl
+	
+	
+	ld a, horiz_words		; multiply by the horizontal word count and store in hl
+	call mult_de_a			; mult_de_a also sets b to zero for us
+	
+	ld a, (text_cursor_x)		; bit 7 should never be set, so this is an easy multiply by two.
+	rlca
+	
+	ld c, a
+	add hl, bc				; there is the address in VRAM of our character!
+	
+	pop de
+	pop bc
+	ret
+
 wr_upd7220:
 	push bc
 	push af
@@ -20,7 +66,7 @@ wr_upd7220:
 	pop bc
 	ret
 
-upd7220_setup:
+upd7220_setup: ; 240x320 (yes, more vertical pixels.)  for 8Mhz clock.
 	ld c, 1
 	xor a
 	call wr_upd7220
@@ -80,5 +126,261 @@ upd7220_setup:
 	ld a, $6B
 	call wr_upd7220
 	
+	ret
+	
+gfx_curs: ; set cursor position (hl is word)
+	push bc
+	
+	ld c, 1
+	ld a, $49
+	call wr_upd7220
+	dec c
+	ld a, l
+	call wr_upd7220
+	ld a, h
+	call wr_upd7220
+	xor a
+	call wr_upd7220
+	
+	pop bc
+	ret
+	
+gfx_mask: ; set mask (hl is mask)
+	push bc
+	
+	ld c, 1
+	ld a, $4A
+	call wr_upd7220
+	dec c
+	ld a, l
+	call wr_upd7220
+	ld a, h
+	call wr_upd7220
+	
+	pop bc
+	ret
+	
+gfx_unmask: ; set mask (hl is mask)
+	push bc
+	
+	ld c, 1
+	ld a, $4A
+	call wr_upd7220
+	dec c
+	ld a, $FF
+	call wr_upd7220
+	call wr_upd7220
+	
+	pop bc
+	ret
+	
+gfx_fill: ; pattern in hl
+	push de
+	push bc
+	push hl
+	ld hl, 0
+	call gfx_curs
+	
+	dec hl ; 0-1 = $FFFF
+	call gfx_mask
+	
+	pop hl ; get back our pattern
+	
+	; set up figure parameters
+	ld a, $4C
+	ld c, 1
+	call wr_upd7220
+	dec c
+	ld a, $02
+	call wr_upd7220
+	ld de, $3FFF
+	ld a, e
+	call wr_upd7220
+	ld a, d
+	call wr_upd7220
+	
+	; write pattern
+	inc c
+	ld a, $20
+	call wr_upd7220
+	dec c
+	ld a, l
+	call wr_upd7220
+	ld a, h
+	call wr_upd7220
+	
+	call gfx_wait_ready
+	
+	; subtract to get remaining words
+	
+	push hl
+	ld hl, VRAM_WORDS - 1
+	scf
+	ccf
+	sbc hl, de
+	ex de, hl
+	pop hl
+	
+	; set up figure parameters again
+	ld a, $4C
+	ld c, 1
+	call wr_upd7220
+	dec c
+	ld a, $02
+	call wr_upd7220
+	ld a, e
+	call wr_upd7220
+	ld a, d
+	call wr_upd7220
+	
+	; write pattern
+	inc c
+	ld a, $20
+	call wr_upd7220
+	dec c
+	ld a, l
+	call wr_upd7220
+	ld a, h
+	call wr_upd7220
+	
+	call gfx_wait_ready
+	
+	pop bc
+	pop de
+	ret
+	
+gfx_wchr: ; character in A
+	push bc
+	push hl
+	push de
+	push af
+	push af
+	
+	ld hl, $FFFF
+	call gfx_mask ; need to set all pixels
+	
+	; set up figure parameters
+	ld a, $4C
+	ld c, 1
+	call wr_upd7220
+	dec c
+	ld a, $02			; set drawing direction.
+	call wr_upd7220
+	xor a
+	call wr_upd7220		; writing one word, no more.  set this parameter to zero.
+	call wr_upd7220
+	
+	pop af
+	
+	; first calculate character memory location
+	rlca
+	rlca
+	rlca
+	push af
+	and $F8
+	ld l, a
+	pop af
+	and $07
+	ld h, a
+	
+	ld bc, font_ptr
+	add hl, bc
+	ex de, hl			; save location of character
+	
+	call gfx_text_curs_to_word
+	
+						; now VRAM location is in hl and de holds character location
+	
+	ld b, 8
+.wrloop:
+	call gfx_curs		; set cursor
+	
+	call gfx_unmask		; set mask to $FFFF
+	
+	ld a, (de)			; load
+	rla					; get the upper nibble
+	rla
+	rla
+	rla
+	rla
+	call .w4px			; write
+	rla					; get the lower nibble
+	rla
+	rla
+	rla
+	call .w4px			; write again
+	
+	inc de
+	push bc
+	ld bc, horiz_words	; we'll need to add this to hl to go to the next line.
+	add hl, bc
+	pop bc
+	
+	djnz .wrloop
+	
+	; character written, advance x counter
+	
+	call gfx_advance_cursor
+	
+	pop af
+	pop de
+	pop hl
+	pop bc
+	ret
+	
+.w4px: ; write four pixels.  The lowest 4 bits of the A register will be used.  1 is dark green, 0 is black.  Set cursor before.
+	exx
+	push af
+	
+	and a, 15
+	ld l, a
+	rrca
+	rrca
+	rrca
+	rrca
+	ld h, a
+	
+	; write pattern
+	ld c, 1
+	ld a, $20
+	call wr_upd7220
+	dec c
+	ld a, l
+	call wr_upd7220
+	ld a, h
+	call wr_upd7220
+	
+	call gfx_wait_ready
+	
+	pop af
+	exx
+	ret
+
+gfx_advance_cursor:
+	ld a, (text_cursor_x)
+	inc a
+	cp maximum_x
+	
+	jp z, gfx_newline
+	jp nc, gfx_newline
+	ld (text_cursor_x), a
+	ret
+
+gfx_newline:
+	ld a, (text_cursor_y)
+	inc a
+	ld (text_cursor_y), a
+	xor a
+	ld (text_cursor_x), a
+	ret
+	
+gfx_wait_ready:
+	push af
+.ready_loop:			; uPD can glitch out without this for some reason
+	in a, ($80)
+	and 12
+	cp 4
+	jp nz, .ready_loop
+	pop af
 	ret
 	

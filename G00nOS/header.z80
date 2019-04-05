@@ -17,6 +17,11 @@ blockdevice.read:	equ $002B
 blockdevice.write:	equ $002E
 blockdevice.set_address: equ $0031
 yield:				equ $0038 ; Z80 interrupt mode 1 vector
+hex_to_int			equ $003B
+byte_to_hex			equ $003E
+hex_to_byte			equ $0041
 
 
-boot:	equ $9000 ; where the BIOS loads the OS
+
+boot:		equ $9000 ; where the BIOS loads the OS
+rom_font:	equ $4000 ; the BIOS ROM font
