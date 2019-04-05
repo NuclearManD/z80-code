@@ -8,7 +8,7 @@ horiz_words: equ 60
 text_cursor_x: db 0
 text_cursor_y: db 0
 
-maximum_x: equ horiz_words/2
+maximum_x: equ horiz_words/2 - 1
 
 gfx_text_curs_to_word: ; uses text_cursor value
 	push bc
@@ -20,10 +20,16 @@ gfx_text_curs_to_word: ; uses text_cursor value
 	rlca
 	push af
 	and $F8
-	ld e, a
+	ld l, a
 	pop af
 	and $07
-	ld d, a
+	ld h, a
+	ld d, 0
+	ld a, (text_cursor_y)
+	ld e, a
+	add hl, de
+	ex de, hl
+	
 	
 	ld a, horiz_words		; multiply by the horizontal word count and store in hl
 	call mult_de_a			; mult_de_a also sets b to zero for us
@@ -302,7 +308,6 @@ gfx_wchr: ; character in A
 	rla
 	rla
 	rla
-	rla
 	call .w4px			; write again
 	
 	inc de
@@ -327,9 +332,9 @@ gfx_wchr: ; character in A
 	exx
 	push af
 	
-	ld h, 0
 	and a, 15
 	ld l, a
+	ld h, 0
 	
 	; write pattern
 	ld c, 1
@@ -361,6 +366,8 @@ gfx_newline:
 	ld a, (text_cursor_y)
 	inc a
 	ld (text_cursor_y), a
+	xor a
+	ld (text_cursor_x), a
 	ret
 	
 gfx_wait_ready:
@@ -374,13 +381,13 @@ gfx_wait_ready:
 	ret
 
 ex_char:
-	db %10000010
-	db %11000010
-	db %10100010
-	db %10010010
-	db %10010010
-	db %10001010
-	db %10000110
-	db %10000010
+	db %00000000
+	db %00001000
+	db %00001100
+	db %11111110
+	db %11111110
+	db %00001100
+	db %00001000
+	db %00000000
 	
 	

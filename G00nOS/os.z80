@@ -19,6 +19,7 @@ _entry:
 	call gfx_wchr
 	call gfx_wchr
 	call gfx_wchr
+	call gfx_newline
 	call gfx_wchr
 	call gfx_wchr
 	call gfx_wchr
