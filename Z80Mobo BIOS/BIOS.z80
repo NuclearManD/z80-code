@@ -10,48 +10,34 @@ org $0000
 
 reboot: equ bios_start
 
+BOOT_MAGIC: equ $6579
+
 stack_top:     equ $FFFF
-text_rows:		equ 20
-free_text_rows:	equ text_rows-3
 
 vectors:
 	jp bios_start ; 0000 (reboot)
 	jp print    ; 0003
 	jp println  ; 0006
 	jp alloc    ; 0009
-	jp 0;delete   000C
+	jp input	; 000C
 	jp strcomp  ; 000F
-	jp 0;input    ; 0012
-	jp 0000     ; 0015
-	jp 0000;endpgm   ; 0018
+	jp chrin	; 0012
+	jp chrout	; 0015
+	jp print_memory; 0018
 	
-	jp 0000     ; 001B
-	jp 0000     ; 001E
-	jp 0000     ; 0021
-	jp 0000     ; 0024
+	jp try		; 001B
+	jp notry	; 001E
+	jp throw	; 0021
+	jp traceback; 0024
 	nop
-	jp 0000     ; 0028
-	jp 0000     ; 002B
-	jp 0000     ; 002E
-	jp 0000     ; 0031
+	jp len		; 0028
+	jp blockdevice.read     ; 002B
+	jp blockdevice.write     ; 002E
+	jp blockdevice.set_address     ; 0031
 	jp 0000     ; 0034
-nop             ; 0037
-int38:          ; 0038, Z80 interrupt mode 1 vector
-	push hl
-	push af
-	push de
-	push bc
-	push ix
-	push iy
-	;jp 55 ; lol
-	
-	pop iy
-	pop ix
-	pop bc
-	pop de
-	pop af
-	pop hl
-	reti
+	nop			; 0037
+	jp yield	; 0038, Z80 interrupt mode 1 vector
+
 bios_start:
 	di
 	ld sp, stack_top
@@ -71,11 +57,75 @@ bios_start:
 	call init_bd_list
 	call pipeserver_setup
 	
+	ld hl, (bd_list)
+	ld (main_disk), hl
+	
+	
 	; system should be completely set up at this point.
 	
+	ld hl, .lookingfordrivesmsg
+	call println
+	
+	; first ensure that a valid disk exists (don't crash the computer)
+	ld a, (bd_list_cnt)
+	or a
+	jp z, .no_disk
+	
+	ld de, 0
+	ld hl, (main_disk)
+	call blockdevice.set_address
+	
+	ld de, bootsector_loc				; read first sector
+	call blockdevice.read
+	
+	ld hl, (bootsector_loc+254)
+	scf
+	ccf
+	ld bc, BOOT_MAGIC
+	sbc hl, bc
+	jp z, .bootable
+	
+	ld hl, .noboot
+	call println
+	
+.flash:
+	ld hl, .flashmsg
+	call println
+	
+	;call flash_pgm
+	
+	halt
+.no_disk:
+	ld hl, .nodisk
+	call println
+	
+	jp .flash
+.bootable:
+	ld hl, .booting
+	call println
+	
+	call bootsector_loc ; BANG!
+	
+	ld hl, .bootret
+	call println
+	
+	jp .flash
+	
 
+.testmsg: db "[Test Message]", 0
+.loadmsg: db "Loading BIOS...",0
+.donemsg: db "Done!", 0
+
+.lookingfordrivesmsg:	db "Checking disks...",0
+.noboot:				db "The disk is not bootable!", 0
+.nodisk:				db "No disks installed!", 0
+.flashmsg:				db "Flash interface automatically enabled.  Waiting for valid input...",0
+.booting:				db "Booting from disk...", 0
+.bootret:				db "Bootloader returned!", 0
+	
 	; allow user to select a terminal by iterating through pipes and
 	; sending a login to each, then see which responds first.
+autosel_terminal:
 	ld de, .rqaccessmsg
 	ld hl, pipe_list_cnt
 	ld c, (hl)
@@ -154,64 +204,11 @@ bios_start:
 .term_selected:
 	ld hl, .termactmsg
 	call println
-	ld hl, .lookingfordrivesmsg
-	call println
-	
-	call upd7220_setup
-	
-	ld hl, 128
-	call alloc ; allocate 128 bytes on the heap for keyboard input
-	push hl
-	
-.ioloop:
-	ld hl, .adrmsg
-	call print
-	
-	pop hl
-	call input
-	call hex_to_byte
-	ld b, 0
-	ld c, a
-	
-	push hl
-	ld hl, .datmsg
-	call print
-	
-	pop hl
-	call input
-	push hl
-	xor a
-	cp (hl)
-	jp z, .io_read
-	call hex_to_byte
-	
-	out (c), a
-	jp .ioloop
-
-.io_read:
-	in a, (c)
-	pop hl
-	call byte_to_hex
-	push hl
-	call println
-	jp .ioloop
-	
-	halt
-
-
-
-.testmsg: db "[Test Message]", 0
-.loadmsg: db "Loading BIOS...",0
-.donemsg: db "Done!", 0
-
-.adrmsg: db "adr> ", 0
-.datmsg: db "dat> ", 0
+	ret
 	
 .rqaccessmsg: db "Press any key to activate this terminal.",0
 .termactmsg: db "Terminal Activated.", 0
 .termselmsg: db "Terminal was activated: ", 0
-
-.lookingfordrivesmsg: db "Checking disks...",0
 	
 system_error:
 	ld hl, bios_broken
@@ -252,6 +249,24 @@ bios_broken:
 	call _uart_println ; in case terminal IO is doomed
 	halt
 .msg: db "Serious BIOS Error.  Please reflash the bios and force reboot of machine.", 0
+
+yield:
+	push hl
+	push af
+	push de
+	push bc
+	push ix
+	push iy
+	;jp 55 ; lol
+	
+	pop iy
+	pop ix
+	pop bc
+	pop de
+	pop af
+	pop hl
+	ret
+
 INCLUDE "string.z80"
 INCLUDE "objutil.z80"
 INCLUDE "uart.z80"
@@ -277,6 +292,11 @@ current_bd:		equ $8200 ; bd stands for Block Device
 bd_list_cnt:	equ $8202
 bd_list:		equ $8204
 main_disk:		equ $8240
+mem_idx:		equ $8242
+
+disk_buffer:	equ $8300
+
+bootsector_loc: equ $9000
 
 
 BIOS_END:

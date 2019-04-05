@@ -52,10 +52,12 @@ throw:
 	ccf
 	sbc hl, bc
 	jp z, system_error
+	di
 	ld sp, (catch_sp)
 	pop hl
 	ld (catch_sp), sp
 	ld sp, (tmp_sp)
+	ei
 	jp (hl)
 traceback:
 	push hl

@@ -1,0 +1,49 @@
+CMD_LOAD256:	equ $05
+CMD_LOAD1024:	equ $06
+CMD_REBOOT:		equ $01
+CMD_CALL:		equ $80
+CMD_WR_BOOT:	equ $C0
+CMD_WR_ALL:		equ $C1 ; writes all data to disk.
+
+load_loc:		equ bootsector_loc
+
+
+
+flash_pgm:
+	ld hl, mem_idx
+	ld (hl), load_loc
+.mainloop:
+	call chrin ; get input
+	
+	cp CMD_REBOOT
+	jp z, 0 ; jp 0 makes the computer reboot
+	
+	cp CMD_LOAD256
+	jp z, .load256
+	
+	cp CMD_LOAD1024
+	jp z, .load1024
+	
+	cp CMD_CALL
+	jp z, .call
+	
+	cp CMD_WR_BOOT
+	jp z, .wrboot
+	
+	ld a, '?'
+	call chrout
+	jp flash_pgm
+.load256:
+	ld c, 0
+	ld de, (mem_idx)
+.ldlopen: ; 'lopen' means 'loop'
+	call chrin
+	ld (de), a
+	inc de
+	inc c
+	
+	jp nc, .ldlopen
+	
+	; loaded 256 bytes.  Now save the loading pointer.
+	ld (mem_idx), de
+	jp .mainloop

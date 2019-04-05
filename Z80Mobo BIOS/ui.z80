@@ -71,6 +71,9 @@ input:
 	pop hl
 	ret
 
+text_rows:		equ 20
+free_text_rows:	equ text_rows-3
+
 print_memory:
 	push hl
 	push de

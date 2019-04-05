@@ -3,9 +3,11 @@
 
 pipeserver_port: equ $90
 
-cmd_read_sector: equ $10
-cmd_write_sector: equ $20
-cmd_set_adr: equ $30
+cmd_read_sector:	equ $10
+cmd_write_sector:	equ $20
+cmd_set_adr: 		equ $30
+cmd_soft_reset:		equ $01
+cmd_reset_index:	equ $02
 
 ; set up the pipe list
 init_pipe_list:
@@ -101,7 +103,14 @@ pipeserver_setup:
 	or a
 	jp z, .not_installed
 	
-	; cool, it's installed.  Now lets go through the devices.
+	; cool, it's installed.  First do a soft reset.
+	
+	push af
+	ld a, cmd_soft_reset
+	out (pipeserver_port+2), a ; send a command to soft reset
+	pop af
+	
+	;Now lets go through the devices.
 	ld c, a
 .device_loop:
 	dec c
@@ -109,7 +118,7 @@ pipeserver_setup:
 	out (pipeserver_port), a ; set device to current
 	in a, (pipeserver_port)  ; get status so we can check if it's a pipe
 	and 1
-	jp z, .next;.block_device
+	jp z, .block_device
 	
 	; it's a pipe, create an object and add it to the list.
 	ld a, c
@@ -129,17 +138,17 @@ pipeserver_setup:
 	pop hl
 	pop bc
 	ret
-;.block_device:
-;	; it's a block device, create an object and add it to the list.
-;	ld a, c
-;	call psblockdev_new
-;	call add_bd_to_list
-;	ld hl, .bd_discovered_msg
-;	call print
-;	ld a, c
-;	call byte_to_hex
-;	call println
-;	jp .next
+.block_device:
+	; it's a block device, create an object and add it to the list.
+	ld a, c
+	call psblockdev_new
+	call add_bd_to_list
+	ld hl, .bd_discovered_msg
+	call print
+	ld a, c
+	call byte_to_hex
+	call println
+	jp .next
 .not_installed:
 	ld hl, .not_installed_msg
 	call println
@@ -219,7 +228,7 @@ pipeserver_new:
 	push bc
 	push af
 	
-	ld hl, 16
+	ld hl, _pipe_structure._size
 	call alloc
 	pop af
 	ld (hl), a ; save ID number
@@ -228,7 +237,7 @@ pipeserver_new:
 	inc hl
 	ex de, hl
 	ld hl, pipeserver_pipe_obj_base
-	ld bc, 15
+	ld bc, _pipe_structure._size-1
 	ldir
 	
 	; make sure to clean the input buffer, pipe servers can leave input across reboots.
@@ -240,6 +249,114 @@ pipeserver_new:
 	call pipe.read
 	jp .clean_loop
 .done:
+	pop bc
+	pop de
+	ret
+
+_pipeserver_wait_ready:
+	in a, (pipeserver_port)
+	and 2
+	jp z, _pipeserver_wait_ready
+	ret
+	
+; destination buffer in DE
+_pipeserver_bdread:
+	di						; a forced yield in this function can crash the data exchange and thus the computer.
+	push de
+	
+	call blockdevice.this
+	ld a, (hl)
+	out (pipeserver_port), a ; select the proper device
+	
+	ld a, cmd_read_sector
+	out (pipeserver_port+2), a ; send a command to read a sector
+	
+	call _pipeserver_wait_ready ; make sure the sector has been read.
+	
+	ld c, pipeserver_port+1		; read 256 bytes of data
+	ld b, $80
+	ld h, d
+	ld l, e
+	inir
+	ld b, $80
+	inir
+	
+	; tell the pipeserver to reset the index register
+	
+	ld a, cmd_reset_index
+	out (pipeserver_port+2), a ; send a command to read a sector
+	
+	pop de
+	;ei  ; uncomment when interupts work
+	ret
+	
+; source buffer in DE
+_pipeserver_bdwrite:
+	di						; a forced yield in this function can crash the data exchange and thus the computer.
+	push de
+	
+	call blockdevice.this
+	ld a, (hl)
+	out (pipeserver_port), a ; select the proper device
+	
+	ld a, cmd_write_sector
+	out (pipeserver_port+2), a ; send a command to write a sector
+	
+	ld c, pipeserver_port+1		; write 256 bytes of data
+	ld b, $80
+	ld h, d
+	ld l, e
+	otir
+	ld b, $80
+	otir
+	
+	; no need to reset the index register after a write
+	
+	pop de
+	;ei  ; uncomment when interupts work
+	ret
+
+; set sector address to value in DE
+_pipeserver_setadr:
+	call blockdevice.this
+	ld a, (hl)
+	out (pipeserver_port), a ; select the proper device
+	
+	ld a, cmd_set_adr
+	out (pipeserver_port+2), a ; send a command to set address
+	
+	ld a, e
+	out (pipeserver_port+1), a ; send low byte to the data input port
+	
+	ld a, d
+	out (pipeserver_port+1), a ; send high byte to the data input port
+	ret
+	
+	
+pipeserver_bd_obj_base:
+	jp _pipeserver_bdread
+	jp _pipeserver_bdwrite
+	jp _pipeserver_setadr
+
+; put block device ID in A, memory allocated automatically, returns object in hl
+psblockdev_new:
+	push de
+	push bc
+	push af
+	
+	ld hl, _bd_structure._size
+	call alloc
+	pop af
+	ld (hl), a ; save ID number
+	
+	push hl ; copy object base into memory
+	inc hl
+	ex de, hl
+	ld hl, pipeserver_bd_obj_base
+	ld bc, _bd_structure._size-1
+	ldir
+	
+	pop hl
 	pop bc
 	pop de
 	ret

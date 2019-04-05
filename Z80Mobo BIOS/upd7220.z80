@@ -25,21 +25,21 @@ upd7220_setup:
 	xor a
 	call wr_upd7220
 	dec c
-	ld a, $12
+	ld a, $10
 	call wr_upd7220
-	ld a, $26
+	ld a, $3A
 	call wr_upd7220
 	ld a, $86
 	call wr_upd7220
-	ld a, $74
+	ld a, $24
 	call wr_upd7220
 	ld a, $04
 	call wr_upd7220
-	ld a, $0A
+	ld a, $3F
 	call wr_upd7220
-	ld a, $7C
+	ld a, $40
 	call wr_upd7220
-	ld a, $49
+	ld a, $5D
 	call wr_upd7220
 	inc c
 	ld a, $6F
@@ -47,7 +47,7 @@ upd7220_setup:
 	ld a, $47
 	call wr_upd7220
 	dec c
-	ld a, $28
+	ld a, $3C
 	call wr_upd7220
 	inc c
 	ld a, $70
@@ -58,7 +58,7 @@ upd7220_setup:
 	call wr_upd7220
 	ld a, $C0
 	call wr_upd7220
-	ld a, $17
+	ld a, $14
 	call wr_upd7220
 	inc c
 	ld a, $4B
