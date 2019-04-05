@@ -2,6 +2,7 @@
 ; generally the functions taken from there are unmodified other than the name.
 
 mult_de_a:
+	;call speed_on
 ;Inputs:
 ;     DE and A are factors
 ;Outputs:
@@ -20,4 +21,5 @@ mult_de_a:
        jr nc,$+3     ;(12|18)*8  96+6x
          add hl,de   ;--         --
        djnz $-5      ;13*7+8     99
+	call speed_off
      ret             ;10         10

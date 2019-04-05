@@ -9,61 +9,12 @@ _entry:
 	ld hl, $0000 ; fill screen with black
 	call gfx_fill
 	
-	xor a
+	ld b, 0
+.lop:
+	ld a, b
 	call gfx_wchr
-	call gfx_wchr
-	call gfx_wchr
-	call gfx_wchr
-	call gfx_wchr
-	call gfx_wchr
-	call gfx_wchr
-	call gfx_wchr
-	call gfx_wchr
-	call gfx_newline
-	call gfx_wchr
-	call gfx_wchr
-	call gfx_wchr
-	call gfx_wchr
-	call gfx_wchr
-	call gfx_wchr
-	call gfx_wchr
-	call gfx_wchr
-	call gfx_wchr
-	call gfx_wchr
-	call gfx_wchr
-	call gfx_wchr
-	call gfx_wchr
-	call gfx_wchr
-	call gfx_wchr
-	call gfx_wchr
-	call gfx_wchr
-	call gfx_wchr
-	call gfx_wchr
-	call gfx_wchr
-	call gfx_wchr
-	call gfx_wchr
-	call gfx_wchr
-	call gfx_wchr
-	call gfx_wchr
-	call gfx_wchr
-	call gfx_wchr
-	call gfx_wchr
-	call gfx_wchr
-	call gfx_wchr
-	call gfx_wchr
-	call gfx_wchr
-	call gfx_wchr
-	call gfx_wchr
-	call gfx_wchr
-	call gfx_wchr
-	
-	call gfx_text_curs_to_word
-	call int_to_hex
-	call println
-	
-	ld hl, (text_cursor_x)
-	call int_to_hex
-	call println
+	inc b
+	jp nz, .lop
 	
 	ret
 .setup_gfx: db "Setting up graphics...", 0
@@ -72,6 +23,7 @@ hex_table:
 db "0123456789ABCDEF",0
 ; int_to_hex - convert HL into hex string
 int_to_hex:
+	;call speed_on
 	push de
 	ex de, hl
 	ld hl, $8800;5
@@ -115,6 +67,20 @@ int_to_hex:
 	ld a, (hl)
 	pop de
 	pop hl
+	call speed_off
+	ret
+	
+speed_on: ; activates the auxillary clock.  BE CAREFUL WITH THIS.  Cannot use BIOS, ROM, or any IO when this clock is activated.
+	push af
+	ld a, 1
+	out ($30), a
+	pop af
+	ret
+speed_off: ; deactivates the auxillary clock.
+	push af
+	xor a
+	out ($30), a
+	pop af
 	ret
 include "upd7220.z80"
 include "math.z80"
