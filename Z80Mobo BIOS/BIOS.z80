@@ -278,7 +278,7 @@ INCLUDE "memory.z80"
 INCLUDE "ui.z80"
 INCLUDE "traceback.z80"
 INCLUDE "pipeserver.z80"
-INCLUDE "upd7220.z80"
+;INCLUDE "upd7220.z80"
 INCLUDE "flash.z80"
 empty_str: db 0
 

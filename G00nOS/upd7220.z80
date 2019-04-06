@@ -455,6 +455,8 @@ db 0, "gfx_pipe_read", 0
 	call throw
 	ret ; how would it return?  Idk, just in case.
 
+; If you are reading this as a reference for the uPD7220, the following is a
+; specific object structure for my OS and BIOS, and is not for the uPD7220.
 gfx_pipe_obj:
 	db $00 ; normal pipe has 00 properties.
 	jp gfx_pipe_read

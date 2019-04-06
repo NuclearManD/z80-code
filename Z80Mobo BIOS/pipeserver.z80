@@ -274,12 +274,15 @@ _pipeserver_bdread:
 	call _pipeserver_wait_ready ; make sure the sector has been read.
 	
 	ld c, pipeserver_port+1		; read 256 bytes of data
-	ld b, $80
+	ld b, $0
 	ld h, d
 	ld l, e
-	inir
-	ld b, $80
-	inir
+.lop:				; slower version of inir to make it more stable
+	in a, (c)
+	ld (hl), a
+	inc hl
+	nop
+	djnz .lop
 	
 	; tell the pipeserver to reset the index register
 	
@@ -303,12 +306,15 @@ _pipeserver_bdwrite:
 	out (pipeserver_port+2), a ; send a command to write a sector
 	
 	ld c, pipeserver_port+1		; write 256 bytes of data
-	ld b, $80
+	ld b, $0
 	ld h, d
 	ld l, e
-	otir
-	ld b, $80
-	otir
+.lop:			; slower version of otir to make it more stable
+	ld a, (hl)
+	out (c), a
+	inc hl
+	nop
+	djnz .lop
 	
 	; no need to reset the index register after a write
 	

@@ -26,6 +26,9 @@ flash_pgm:
 	cp CMD_WR_BOOT
 	jp z, .wrboot
 	
+	cp CMD_WR_ALL
+	jp z, .wrall
+	
 	ld a, '?'
 	call chrout
 	jp flash_pgm
@@ -44,6 +47,8 @@ flash_pgm:
 	
 	; loaded 256 bytes.  Now save the loading pointer.
 	ld (mem_idx), de
+	ld a, 'k'
+	call chrout
 	jp .mainloop
 .call:
 	call load_loc
@@ -64,5 +69,31 @@ flash_pgm:
 .error:
 	ld a, 'e'
 	call chrout
+	jp .mainloop
+.wrall:
+	ld a, (bd_list_cnt)
+	or a
+	jp z, .error
+	
+	ld de, 0
+	ld hl, (main_disk)
+	call blockdevice.set_address
+	
+	ld de, load_loc
+	ld bc, load_loc
+	ld a, (mem_idx+1)
+	sub b
+	ld b, a ; b is now the number of sectors to be written
+	call chrout
+.wr_lopen:
+	call blockdevice.write
+	ld a, d
+	inc a
+	ld d, a
+	djnz .wr_lopen ; write b number of sectors
+	
+	ld a, 'k'
+	call chrout
+	
 	jp .mainloop
 

@@ -2,6 +2,64 @@ include "header.z80"
 
 org boot
 
+; I'm couting bytes because the bootloader must be exactly 256 bytes (including final magic)
+_bootloader:
+	ld a, (bd_list_cnt)					; 3 bytes
+	or a								; 1 byte
+	jp z, .no_disk						; 3 bytes
+	
+	; load 1792 bytes from disk (first 2k of disk, 7 sectors + boot sector)
+	ld hl, (main_disk)					; 3 bytes
+	; start copy at sector 1
+	ld de, 1							; 3 bytes
+	call blockdevice.set_address		; 3 bytes
+	ld de, boot+256						; 3 bytes
+	ld b, 15							; 2 bytes
+.load_loop:
+	call blockdevice.read				; 3 bytes
+	; next 256 bytes to load
+	ld a, d								; 1 byte
+	inc a								; 1 byte
+	ld d, a								; 1 byte
+	djnz .load_loop						; 2 bytes  (29 thus far)
+	
+	; loaded OS!  Now check the magic number.
+	ld hl, (magic_check)				; 3 bytes
+	ld bc, TEST_MAGIC					; 3 bytes
+	and a								; 1 byte
+	sbc hl, bc							; 2 bytes
+	jr nz, .bad_install					; 2 bytes
+	
+	; magic is valid, start execution!
+	jp _entry							; 3 bytes
+.no_disk:
+	ld hl, .no_disk_msg					; 3 bytes
+	call println						; 3 bytes
+	
+	; return tells BIOS to enter flash mode.
+	ret									; 1 byte
+.bad_install:
+	ld hl, .bad_install_msg				; 3 bytes
+	call println						; 3 bytes
+	
+	; return tells BIOS to enter flash mode.
+	ret									; 1 byte
+	
+; above code is 57 bytes
+.no_disk_msg: db		"No disk! Cannot load!", 0 ; 22 bytes
+.bad_install_msg: db	"Bad install, reflash!", 0 ; 22 bytes
+
+; total here is 101 bytes
+dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ; another 50 bytes
+dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ; another 50 bytes
+dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ; another 50 bytes
+
+; now 251 bytes
+
+db 0, 0, 0, "ye" ; bang, all of the boot sector
+	
+	
+
 _entry:
 	ld hl, .setup_gfx
 	call println
@@ -32,4 +90,5 @@ set_pipes:
 	ld (term_outpipe), hl
 	ld (term_inpipe), hl
 	ret
-	
+TEST_MAGIC: equ $C7D4
+magic_check: dw TEST_MAGIC
