@@ -44,14 +44,14 @@ def send256(buffer):
     printout()
     if type(buffer)==bytes and len(buffer)==256:
         ser.write(b"\x05")
-        for i in range(0,256,2):
+        for i in range(0,256,16):
             if(ser.inWaiting()>0):
                 printout()
                 send256(buffer)
                 break
-            ser.write(buffer[i:2+i])
+            ser.write(buffer[i:16+i])
             ser.flush()
-            time.sleep(0.006)
+            time.sleep(0.01)
     else:
         print("ERROR: cannot write, invalid buffer!")
         return False
@@ -98,5 +98,26 @@ def ldburn(fn):
     send256(make_256(binary[whole_sectors*256:]))
 
     wr_all()
-def testG00nOS():
-    ldexec("G00nOS/a.bin")
+def testG00nOS(break_fs = True):
+    fn = "G00nOS/a.bin"
+    f = open(fn, 'rb')
+    binary = f.read()
+    f.close()
+
+    if break_fs:
+        binary = binary+b'\x00'*(4096-len(binary))+bytes([255,255,255,255,255,255])
+
+    whole_sectors = len(binary)//256
+
+    reboot()
+
+    time.sleep(1)
+
+    for i in range(0,whole_sectors*256,256):
+        send256(binary[i:i+256])
+    send256(make_256(binary[whole_sectors*256:]))
+
+    wr_all()
+    reboot()
+    time.sleep(1.2)
+    printout()

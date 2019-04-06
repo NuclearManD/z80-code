@@ -57,8 +57,13 @@ dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ; a
 ; now 251 bytes
 
 db 0, 0, 0, "ye" ; bang, all of the boot sector
-	
-	
+
+_jump_table:	; User programs use this and the BIOS jump table to control the computer.
+	jp _entry			; $9100
+	jp input			; $9103
+	jp gfx_fill			; $9106
+	jp gfx_newline		; $9109
+	jp gfx_indent		; $910C
 
 _entry:
 	ld hl, .setup_gfx
@@ -69,21 +74,66 @@ _entry:
 	
 	call set_pipes
 	
+	ld hl, .ldfs
+	call println
+	
+	ld hl, (main_disk)
+	call gfs_check_fs
+	jr nz, .bad_fs
+	
+.ready:
 	ld hl, .rdy_msg
 	call println
-.loop:
+	
+.os_quit:
+	ld hl, .msg_os_quit
+	call println
+	
+	ld hl, (pipe_list)		; fix flash program (don't hack the BIOS...)
+	ld (term_outpipe), hl
+	ld (term_inpipe), hl
+	
+	ret ; enter flash program
+.bad_fs:
+	ld hl, .msg_bad_fs
+	call print
+	
 	call chrin
-	cp '`'
-	jp z, .exit
+	push af
 	call chrout
-	jp .loop
-.exit:
-	jp 0 ; reboot
+	call gfx_newline
+	pop af
+	cp 'Y'
+	jr nz, .os_quit
+	
+	ld hl, .msg_enter_fs_size	; get size input from user
+	call print
+	ld hl, 64
+	call alloc
+	call input
+	call hex_to_int
+	ld b, h
+	ld c, l
+	ld hl, (main_disk)
+	call gfs_format
+	
+	ld hl, .msg_formatted
+	call println
+	
+	jr .ready
+	
+	
 .setup_gfx: db "Setting up graphics...", 0
-.rdy_msg:	db "Ready!  Keyboard active.", 0
+.ldfs:	db "Checking filesystem...", 0
+.rdy_msg:	db "Ready!", 0
+.msg_bad_fs: db "Filesystem is invalid.",$0D,"Format? [Y/n]", 0
+.msg_os_quit: db "OS Exiting...", 0
+.msg_formatted: db "Formatted.", 0
+.msg_enter_fs_size: db "FS sectors in hex >", 0
 
 include "upd7220.z80"
 include "math.z80"
+include "G00nFS.z80"
 
 set_pipes:
 	ld hl, gfx_pipe_obj ; gfx_pipe_obj can also be the keyboard
@@ -92,3 +142,4 @@ set_pipes:
 	ret
 TEST_MAGIC: equ $C7D4
 magic_check: dw TEST_MAGIC
+os_end: equ $A000

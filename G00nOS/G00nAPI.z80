@@ -21,14 +21,11 @@ hex_to_int:			equ $003B
 byte_to_hex:		equ $003E
 hex_to_byte:		equ $0041
 
+; G00nOS specific jumps:
 
 
-boot:		equ $9000 ; where the BIOS loads the OS
-rom_font:	equ $4000 ; the BIOS ROM font
-
-term_inpipe:	equ $8006	; no user program should mess with these.  For the OS, BIOS, and drivers only.
-term_outpipe:	equ $8008
-pipe_list:		equ $810C
-bd_list_cnt:	equ $8202
-bd_list:		equ $8204
-main_disk:		equ $8240
+_entry:				equ $9100
+input:				equ $9103
+gfx_fill:			equ $9106
+gfx_newline:		equ $9109
+gfx_indent:			equ $910C

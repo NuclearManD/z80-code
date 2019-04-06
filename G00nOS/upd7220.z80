@@ -464,3 +464,29 @@ gfx_pipe_obj:
 	jp gfx_pipe_available
 	jp gfx_print
 	jp gfx_println
+	
+
+; read a line from the keyboard
+input:
+	push hl
+.lopen:
+	call chrin
+	push af
+	call gfx_chr
+	pop af
+	cp 8
+	jp z, .delete
+	out (0), a
+	cp 13
+	jp z, .done
+	ld (hl), a
+	inc hl
+	jp .lopen
+.delete:
+	dec hl
+	jr .lopen
+.done:
+	xor a
+	ld (hl), a
+	pop hl
+	ret

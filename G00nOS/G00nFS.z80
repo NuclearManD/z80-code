@@ -1,0 +1,190 @@
+; G00N File System (GFS) driver		:3
+
+minimum_gfs_sector_count: equ 20 ; 16 sectors for OS + 1 for head + 1 for root + 1 AT + 1 file sector
+
+GFS_head: equ os_end
+GFS_NROOT: equ GFS_head
+GFS_NSECTORS: equ GFS_head+2
+GFS_ROOT_SECTORS: equ GFS_head+4
+
+GFS_head_sector: equ 16 ; first 16 sectors are for the OS
+GFS_root_start: equ 17
+
+GFS_root: equ os_end+$100
+GFS_tmp_at: equ os_end+$200 ; allocation table
+
+file_obj:
+	.size: equ $20
+	.properties:	equ $00
+	.hash:			equ $02 ; NOTE: this is OPTIONAL.  Not all files will have it.
+	.alloc_tbl_adr:	equ $04
+	.size_off:		equ $06
+	
+	._file_flag:	equ $01
+	._dir_flag:		equ $02
+	._krypt_flag:	equ $04
+	
+	.name_off:		equ $10
+	.get_name:	; expects object in hl, returns name in hl
+		push bc
+		ld bc, .name_off
+		add hl, bc
+		pop bc
+		ret
+	.isFile:	; expects object in hl, resets zero flag if true
+		ld a, (hl)
+		and ._file_flag
+		ret
+	.isDir:	; expects object in hl, resets zero flag if true
+		ld a, (hl)
+		and ._dir_flag
+		ret
+	.getSize: ; expects object in hl.  Returns in bc.
+		push hl
+		ld bc, .size_off
+		add hl, bc
+		ld c, (hl)
+		inc hl
+		ld b, (hl)
+		pop hl
+		ret
+	.read: ; expects object in hl and buffer in de
+		push bc
+		push hl
+		push de
+		
+		push de
+		push hl
+		
+		ld bc, .alloc_tbl_adr
+		add hl, bc
+		
+		ld e, (hl)
+		inc hl
+		ld d, (hl)
+		
+		pop hl
+		
+		call .getSize
+		ld a, c
+		or a
+		ld a, b
+		jp z, ._noAdd1
+		inc a
+	._noAdd1:
+		pop hl
+		call read_into_from_at
+		
+		pop de
+		pop hl
+		pop bc
+		ret
+		
+read_into_from_at:	; 'at' means allocation table. Store AT address in de and number of sectors in a, buffer address in hl
+	push de
+	push bc
+	push hl
+	push af
+	
+	ld hl, (main_disk)
+	call blockdevice.set_address
+	
+	ld de, GFS_tmp_at
+	call blockdevice.read			; read the AT
+	ld (.ptr), de					; save AT pointer
+	
+	pop af
+	pop de
+	ld b, a							; load so many sectors
+.loop:
+	push de
+	
+	ld hl, (.ptr)		; get next sector in de and increment the index
+	ld e, (hl)
+	inc hl
+	ld d, (hl)
+	inc hl
+	ld (.ptr), hl
+	
+	ld hl, (main_disk)	; read the sector into the buffer
+	call blockdevice.set_address
+	pop de
+	call blockdevice.read
+	
+	ld a, d				; add 256 bytes to buffer pointer and push
+	inc a
+	ld d, a
+	
+	djnz .loop			; if all sectors are read then break the loop
+	
+	pop bc
+	pop de
+	ret
+.ptr: dw 0
+
+gfs_format:				; reformat the block device hl.  Max filesystem size in bc, BE CAREFUL: Erases all data!
+	push de
+	push bc
+	push hl
+	push hl
+	ld hl, 0
+	ld (GFS_NROOT), hl
+	ld h, b
+	ld l, c
+	ld (GFS_NSECTORS), hl
+	ld hl, 8 ; 8 sectors * 8 entries/sector = 64 entries in root directory
+	ld (GFS_ROOT_SECTORS), hl
+	pop hl
+	ld de, GFS_head_sector
+	call blockdevice.set_address
+	ld de, GFS_head
+	call blockdevice.write
+	
+	pop hl
+	pop bc
+	pop de
+	ret
+gfs_check_fs: ; check the block device hl. z set for valid, reset for invalid.
+	push de
+	push bc
+	push hl
+	
+	ld de, GFS_head_sector			; read FS head
+	call blockdevice.set_address
+	ld de, GFS_head
+	call blockdevice.read
+	
+	ld bc, (GFS_NROOT)
+	ld hl, (GFS_ROOT_SECTORS)
+	
+	add hl, hl
+	jr c, .nope
+	add hl, hl
+	jr c, .nope
+	add hl, hl	; hl now contains the maximum number of root entries
+	jr c, .nope
+	or a	; reset carry
+	sbc hl, bc
+	
+	jr c, .nope	; Invalid if there are more root entries than possible
+	
+	ld hl, (GFS_NSECTORS)
+	ld bc, minimum_gfs_sector_count
+	or a
+	sbc hl, bc
+	jr c, .nope
+	
+	pop hl
+	pop bc
+	pop de
+	
+	xor a
+	ret
+.nope:
+	pop hl
+	pop bc
+	pop de
+	xor a
+	inc a
+	ret
+	
