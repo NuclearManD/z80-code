@@ -61,6 +61,15 @@ bios_start:
 	call init_bd_list
 	call pipeserver_setup
 	
+	ld a, (pipe_list_cnt)
+	or a
+	jp z, .use_primary_uart
+	
+	;ld hl, (pipe_list+4) ; use the other UART if possible
+	;ld (term_outpipe), hl
+	;ld (term_inpipe), hl
+.use_primary_uart:
+	
 	ld hl, (bd_list)
 	ld (main_disk), hl
 	

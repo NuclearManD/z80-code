@@ -65,7 +65,15 @@ _jump_table:	; User programs use this and the BIOS jump table to control the com
 	jp gfx_newline		; $9109
 	jp gfx_indent		; $910C
 
+; ==================================================================
+;
+; O S   S T A R T
+;
+; ==================================================================
+
 _entry:
+	ld hl, .error
+	call try
 	ld hl, .setup_gfx
 	call println
 	call upd7220_setup
@@ -83,6 +91,25 @@ _entry:
 .ready:
 	ld hl, .rdy_msg
 	call println
+
+.loop:
+	ld a, '>'
+	call gfx_chr
+	
+	ld hl, 64		; this code is terrible because it has a serious memory leak.  Oh well.
+	call alloc
+	call input
+	ld a, (hl)
+	or a
+	jp z, .os_quit
+	ex de, hl
+	ld hl, 64		; this code is terrible because it has a serious memory leak.  Oh well, it's just a test.
+	call alloc
+	ex de, hl
+	call get_parent_dir
+	ex de, hl
+	call print
+	jp .loop
 	
 .os_quit:
 	ld hl, .msg_os_quit
@@ -120,6 +147,9 @@ _entry:
 	call println
 	
 	jr .ready
+.error:
+	call traceback
+	jp .os_quit
 	
 	
 .setup_gfx: db "Setting up graphics...", 0

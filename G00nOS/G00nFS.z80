@@ -222,9 +222,10 @@ ld_dir_table:	; path in hl
 	jp z, .done
 	; set the sector address
 	ld hl, (main_disk)
-	call blockdevice.set_adr
+	call blockdevice.set_address
 	
-	ld b, (GFS_ROOT_SECTORS) ; load directory sector count
+	ld a, (GFS_ROOT_SECTORS) ; load directory sector count
+	ld b, a
 .search_blockloop:
 	ld de, GFS_root
 	ld hl, (main_disk)
@@ -314,14 +315,41 @@ comp_path_root: ; sets zero flag if the first path entry of hl and de are the sa
 	
 get_parent_dir: ; gets parent directory.  give original path in hl and buffer in de, a is the original path's last '/', or zero if none.
 	push bc
-	push de
 	push hl
 	
 	call strlen
+	dec bc		; don't check the final zero
+	add hl, bc
 	ld b, c
-	dec b ; don't check the final zero
 .loop:
+	ld a, (hl)
+	or a
+	jp z, .noslash
+	cp '/'
+	jp z, .slash
+	dec hl
+	djnz .loop
+.noslash:	; if here then there's no slash.
+	ld a, '/'
+	ld (de), a
+	xor a
+	ld (de), a
 	
-	
-
+	pop hl
+	pop bc
+	ret
+.slash:
+	ld a, b		; set up string copy
+	ld b, 0
+	ld c, a
+	pop hl
+	push hl
+	push af
+	ldir
+	xor a
+	ld (de), a
+	pop af
+	pop hl
+	pop bc
+	ret
 	

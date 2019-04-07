@@ -12,10 +12,13 @@ flash_pgm:
 	ld hl, load_loc
 	ld (mem_idx), hl
 .mainloop:
-	call chrin ; get input
+	jp .mainloop_clutch
+db 0, "flash_pgm.mainloop_clutch", 0
+.mainloop_clutch:
+	call flash_chrin ; get input
 	
 	cp CMD_REBOOT
-	jp z, 0 ; jp 0 makes the computer reboot
+	jp z, .confirm_reboot
 	
 	cp CMD_LOAD256
 	jp z, .load256
@@ -37,7 +40,10 @@ flash_pgm:
 	ld de, (mem_idx)
 .ldlopen: ; 'lopen' means 'loop'
 	push bc
-	call chrin
+	jp .ldlopen_clutch
+db 0,"flash_pgm.ldlopen_clutch",0
+.ldlopen_clutch:
+	call flash_chrin
 	ld (de), a
 	inc de
 	pop bc
@@ -96,4 +102,22 @@ flash_pgm:
 	call chrout
 	
 	jp .mainloop
+.confirm_reboot:
+	call flash_chrin
+	cp CMD_REBOOT
+	jp z, 0 ; jp 0 makes the computer reboot
+	jp .mainloop
 
+flash_chrin:
+	push hl
+.rest:
+	ld hl, .deglitch
+	call try
+	call chrin
+	push af
+	call notry
+	pop af
+	pop hl
+	ret
+.deglitch:
+	jp .rest
