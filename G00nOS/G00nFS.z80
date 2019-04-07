@@ -2,7 +2,7 @@
 
 minimum_gfs_sector_count: equ 20 ; 16 sectors for OS + 1 for head + 1 for root + 1 AT + 1 file sector
 
-GFS_head: equ os_end
+GFS_head: equ $A000 ; End of loaded OS and 768 bytes before the BIOS heap bottom, so we can store 3 sectors here.
 GFS_NROOT: equ GFS_head
 GFS_NSECTORS: equ GFS_head+2
 GFS_ROOT_SECTORS: equ GFS_head+4
@@ -54,16 +54,8 @@ file_obj:
 		push de
 		
 		push de
-		push hl
 		
-		ld bc, .alloc_tbl_adr
-		add hl, bc
-		
-		ld e, (hl)
-		inc hl
-		ld d, (hl)
-		
-		pop hl
+		call file_obj.get_at
 		
 		call .getSize
 		ld a, c
@@ -76,6 +68,20 @@ file_obj:
 		call read_into_from_at
 		
 		pop de
+		pop hl
+		pop bc
+		ret
+	.get_at:	; file object in hl, returns table sector in de
+		push bc
+		push hl
+		
+		ld bc, .alloc_tbl_adr
+		add hl, bc
+		
+		ld e, (hl)
+		inc hl
+		ld d, (hl)
+		
 		pop hl
 		pop bc
 		ret
@@ -187,4 +193,135 @@ gfs_check_fs: ; check the block device hl. z set for valid, reset for invalid.
 	xor a
 	inc a
 	ret
+
+current_dir: db "/", 0
+dw 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+dw 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 ; 64 byte current directory buffer
+
+ld_dir_table:	; path in hl
+	push de
+	push bc
+	push hl
+	
+.dump_loop:
+	ld a, (hl)
+	or a
+	jr z, .dump_done
+	inc hl
+	cp '/'
+	jr z,.dump_loop
+.dump_done:
+
+	ld (.path_ptr), hl ; save pointer
+	
+	; uneeded chars have been dumped.  Load the root directory
+	ld de, GFS_root_start
+.load_loop:
+	xor a
+	cp (hl)
+	jp z, .done
+	; set the sector address
+	ld hl, (main_disk)
+	call blockdevice.set_adr
+	
+	ld b, (GFS_ROOT_SECTORS) ; load directory sector count
+.search_blockloop:
+	ld de, GFS_root
+	ld hl, (main_disk)
+	call blockdevice.read
+	
+	push bc
+	ld b, 8
+	ld hl, GFS_root
+.search_entryloop:	; loop through the file entries
+	ld a, b
+	add b
+	add a
+	add a
+	add a
+	add a
+	ld l, a 		; address in sector of file entry in hl (can now use file objects)
+	
+	call file_obj.isDir
+	jr z, .search_entryloop
+	push hl			; save file object pointer
+	call file_obj.get_name
+	ld de, (.path_ptr)
+	call comp_path_root
+	pop hl			; load file object pointer
+	jp z, .found
+	djnz .search_entryloop	; count with b
+	; not found
+	pop bc ; get back saved counter
+	djnz .search_blockloop ; loop back to block searcher
+	; ... or not.  Throw exception because the directory was not found.
+	call throw
+.found:
+	pop bc ; prevent stack corruption
+	; found it!  Get the AT address and load the AT
+	call file_obj.get_at
+	ld hl, (main_disk)
+	call blockdevice.set_address
+	ld de, GFS_TMP_AT ; store in the temporary AT memory
+	call blockdevice.read
+	
+	ld de, (GFS_tmp_at) ; load the first sector of the directory
+	
+	; now clear this segment of the path
+	ld hl, (.path_ptr)
+.skipping_loop:
+	ld a, (hl)
+	or a
+	jp z, .setptr
+	inc hl ; skip any '/' and increment here
+	cp '/'
+	jp z, .setptr
+	jp .skipping_loop
+.setptr:
+	ld (.path_ptr), hl
+	jp .load_loop
+.done:
+	pop hl
+	pop bc
+	pop de
+	ret
+	
+.path_ptr: dw 0
+
+comp_path_root: ; sets zero flag if the first path entry of hl and de are the same; ignores the rest.
+	push de
+	push hl
+.strcomp_l: 
+    ld a,(de)
+	or a
+	jp z, .termination
+	cp '/'
+	jp z, .termination
+    cp (hl) 
+    jp nz, .strcret    ;nz means they are not equal 
+    inc hl 
+    inc de
+    jp .strcomp_l
+.termination:
+	ld a, (hl)
+	or a
+	jp z, .strcret
+	cp '/'
+.strcret:
+	pop hl
+	pop de
+	ret
+	
+get_parent_dir: ; gets parent directory.  give original path in hl and buffer in de, a is the original path's last '/', or zero if none.
+	push bc
+	push de
+	push hl
+	
+	call strlen
+	ld b, c
+	dec b ; don't check the final zero
+.loop:
+	
+	
+
 	

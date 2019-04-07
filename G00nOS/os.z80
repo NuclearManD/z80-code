@@ -69,8 +69,7 @@ _entry:
 	ld hl, .setup_gfx
 	call println
 	call upd7220_setup
-	ld hl, $0000 ; fill screen with black
-	call gfx_fill
+	call gfx_clear		; fill screen with black and reset cursor position
 	
 	call set_pipes
 	

@@ -27,6 +27,7 @@ gfx_text_curs_to_word: ; uses text_cursor value
 	ld h, a
 	ld d, 0
 	ld a, (text_cursor_y)
+	add a ; add another pixel (multiply by 10)
 	ld e, a
 	add hl, de
 	ex de, hl
@@ -248,6 +249,16 @@ gfx_fill: ; pattern in hl
 	
 	pop bc
 	pop de
+	ret
+	
+gfx_clear:
+	push hl
+	ld hl, 0
+	call gfx_fill
+	xor a
+	ld (text_cursor_x), a
+	ld (text_cursor_y), a
+	pop hl
 	ret
 	
 gfx_wchr: ; character in A

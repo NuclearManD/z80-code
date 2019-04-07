@@ -12,7 +12,7 @@ try:				equ $001B
 notry:				equ $001E
 throw:				equ $0021
 traceback:			equ $0024
-len:				equ $0028
+strlen:				equ $0028
 blockdevice.read:	equ $002B
 blockdevice.write:	equ $002E
 blockdevice.set_address: equ $0031
