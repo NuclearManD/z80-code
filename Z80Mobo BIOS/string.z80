@@ -130,17 +130,16 @@ hex_to_int:
 	ret
 ; len - get string length in bc
 len:
-	push de
 	push hl
-	ld a, 0
-	cpir
-	pop de
+	ld bc, 0
+.loop:
+	ld a, (hl)
+	inc hl
 	or a
-	sbc hl, de 
-	ld b, h
-	ld c, l
-	ld h, d
-	ld l, e
-	pop de
+	jp z, .done
+	inc bc
+	jp .loop
+.done:
+	pop hl
 	ret
 	
