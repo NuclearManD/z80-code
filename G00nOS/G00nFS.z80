@@ -597,9 +597,11 @@ gfs_nextfile:				; returns next file object in hl
 	ld a, c
 	jp nz, .not_new_sector	; increment counter.  If our location in the sector goes out of bounds then go to the next sector.
 
+	ex de, hl
 	ld hl, (.sector)
 	inc hl
 	ld (.sector), hl
+	ex de, hl
 	
 .not_new_sector:	
 	ld (.index), a
@@ -609,10 +611,12 @@ gfs_nextfile:				; returns next file object in hl
 	ret
 .loopback:
 	xor a					; carry flag is reset here
+	ex de, hl
 	ld hl, (.sector)
 	ld bc, 7
 	sbc hl, bc				; subtract 7 to get back the first sector (sector 0)
 	ld (.sector), hl
+	ex de, hl
 	jp .not_new_sector
 	
 	
@@ -679,3 +683,4 @@ gfs_allocate_8_sectors:		; returns first sector id in de
 db 0,"gfs_allocate_8_sectors", 0
 .error:
 	call throw
+root_str: db "/", 0

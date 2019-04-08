@@ -92,44 +92,27 @@ _entry:
 .ready:
 	ld hl, .rdy_msg
 	call println
-
-.loop:
-	ld a, '>'
-	call gfx_chr
 	
-	ld hl, 30
-	call alloc
-	call input
-	
-	ld a, (hl)
-	cp $20
-	jp c, .os_quit
-	
-	call gfs_mkdir
-	
-	ld hl, 2
-	call alloc
-	ld a, '/'
-	ld (hl), a
-	xor a
-	inc hl
-	ld (hl), a				; print out the root directory binary data (first sector)  in UART
-	
+	ld hl, root_str
 	call ld_dir_table
-	
 	ld de, GFS_root
 	ld hl, (main_disk)
 	call blockdevice.read
-	
-	ld hl, (pipe_list)
+	ld hl, (pipe_list)		; fix flash program (don't hack the BIOS...)
 	ld (term_outpipe), hl
-
 	ld hl, GFS_root
 	call print_memory
-	
 	call set_pipes
 	
-	jp .loop
+	ld b, 64
+.loop:
+	call gfs_nextfile
+	call file_obj.isDir
+	jp z, .__next
+	call file_obj.get_name
+	call println
+.__next:
+	djnz .loop
 	
 .os_quit:
 	ld hl, .msg_os_quit

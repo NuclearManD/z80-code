@@ -125,7 +125,7 @@ def testG00nOS(break_fs = True):
 
     reboot()
 
-    time.sleep(1)
+    time.sleep(10)
 
     for i in range(0,whole_sectors*256,256):
         if not send256(binary[i:i+256]):
@@ -144,3 +144,9 @@ def testG00nOS(break_fs = True):
     reboot()
     time.sleep(1.2)
     printout()
+def clean_hex_table(tbl):
+    tbl = tbl.split('\n')[1:]
+    for i in range(len(tbl)):
+        tbl[i] = tbl[i].split('|')[1]
+    return ''.join(tbl)
+    

@@ -20,12 +20,23 @@ translate_vectors = {
     0x003B:"hex_to_int",
     0x003E:"byte_to_hex",
     0x0041:"hex_to_byte",
+    0x8240:"main_disk",
     0x9000:"BOOT_OFFSET",
     }
+jump_table_offset = 0x100
+def scan_jump_table(binary, off, lbl):
+    off+=1+jump_table_offset
+    i = binary[off]|(binary[off+1]<<8)
+    translate_vectors[i] = lbl
 f = open(input("OS Binary File > "),'rb')
 binary = f.read()
 f.close()
 tb_list = []
+scan_jump_table(binary, 0, "_entry")
+scan_jump_table(binary, 3, "input (OS)")
+scan_jump_table(binary, 6, "gfx_fill")
+scan_jump_table(binary, 9, "gfx_newline")
+scan_jump_table(binary, 12, "gfx_fill")
 print("Now type in your stack, bottom to top, or most recent call first.  Leave blank to end.")
 while True:
     inp = input(" > ")
