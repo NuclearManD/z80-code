@@ -142,4 +142,11 @@ len:
 .done:
 	pop hl
 	ret
-	
+strcpy: ; copy string hl to de
+	ld a, (hl)
+	ld (de), a
+	or a
+	ret z
+	inc hl
+	inc de
+	jp strcpy

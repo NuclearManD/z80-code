@@ -10,6 +10,12 @@ def reboot():
     printout()
 def wr_boot():
     ser.write(b"\xC0")
+def timeout_read(timeout = 0.3):
+    timer = time.time()+timeout
+    while timer>time.time():
+        if ser.inWaiting()>0:
+            return ser.read()
+    return None
 def wr_all():
     time.sleep(.1)
     printout()
@@ -24,15 +30,12 @@ def wr_all():
             else:
                 print("Command gave bad response:",v, "[continuing anyway]")
                 auth = True
-    timer = time.time()+5
-    while timer>time.time():
-        if ser.inWaiting()>0:
-            v = ser.read()
-            if v==b'k':
-                return True
-            else:
-                print("Command gave bad response: ",v)
-                return False
+    v = timeout_read(5)
+    if v==b'k':
+        return True
+    else:
+        print("Command gave bad response: ",v)
+        return False
     print("Command timed out!")
     return False
 def call_loaded():
@@ -44,31 +47,30 @@ def send256(buffer):
     printout()
     if type(buffer)==bytes and len(buffer)==256:
         ser.write(b"\x05")
-        time.sleep(0.03)
+        time.sleep(0.01)
         if(ser.inWaiting()>0):
             print("ERROR: Write failed; Flashing unexpected response!")
             return False
-        for i in range(8):
+        for i in range(16):
             if(ser.inWaiting()>0):
                 printout()
                 send256(buffer)
                 break
             ser.write(buffer[i:i+1])
             ser.flush()
-            time.sleep(0.05)
-        for i in range(8,256,8):
+            time.sleep(0.01)
+        for i in range(16,256,16):
             if(ser.inWaiting()>0):
                 printout()
                 send256(buffer)
                 break
-            ser.write(buffer[i:i+8])
+            ser.write(buffer[i:i+16])
             ser.flush()
             time.sleep(0.02)
     else:
         print("ERROR: cannot write, invalid buffer!")
         return False
-    time.sleep(0.1)
-    if ser.inWaiting()==0 or ser.read()!=b'k':
+    if timeout_read(.3)!=b'k':
         print("Unknown Error")
         return False
     return True

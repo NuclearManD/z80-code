@@ -40,6 +40,7 @@ vectors:
 	jp hex_to_int	; 003B
 	jp byte_to_hex	; 003E
 	jp hex_to_byte	; 0041
+	jp strcpy		; 0044
 	
 
 bios_start:

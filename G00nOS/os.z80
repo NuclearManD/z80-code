@@ -50,6 +50,7 @@ _bootloader:
 .bad_install_msg: db	"Bad install, reflash!", 0 ; 22 bytes
 
 ; total here is 101 bytes
+os_str_buffer:		; use this otherwise wasted space as a string buffer
 dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ; another 50 bytes
 dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ; another 50 bytes
 dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ; another 50 bytes
@@ -96,19 +97,38 @@ _entry:
 	ld a, '>'
 	call gfx_chr
 	
-	ld hl, 64		; this code is terrible because it has a serious memory leak.  Oh well.
+	ld hl, 30
 	call alloc
 	call input
+	
 	ld a, (hl)
-	or a
-	jp z, .os_quit
-	ex de, hl
-	ld hl, 64		; this code is terrible because it has a serious memory leak.  Oh well, it's just a test.
+	cp $20
+	jp c, .os_quit
+	
+	call gfs_mkdir
+	
+	ld hl, 2
 	call alloc
-	ex de, hl
-	call get_parent_dir
-	ex de, hl
-	call print
+	ld a, '/'
+	ld (hl), a
+	xor a
+	inc hl
+	ld (hl), a				; print out the root directory binary data (first sector)  in UART
+	
+	call ld_dir_table
+	
+	ld de, GFS_root
+	ld hl, (main_disk)
+	call blockdevice.read
+	
+	ld hl, (pipe_list)
+	ld (term_outpipe), hl
+
+	ld hl, GFS_root
+	call print_memory
+	
+	call set_pipes
+	
 	jp .loop
 	
 .os_quit:
@@ -119,7 +139,7 @@ _entry:
 	ld (term_outpipe), hl
 	ld (term_inpipe), hl
 	
-	ret ; enter flash program
+	ret						; enter flash program
 .bad_fs:
 	ld hl, .msg_bad_fs
 	call print
@@ -146,7 +166,7 @@ _entry:
 	ld hl, .msg_formatted
 	call println
 	
-	jr .ready
+	jp .ready
 .error:
 	call traceback
 	jp .os_quit
@@ -154,7 +174,7 @@ _entry:
 	
 .setup_gfx: db "Setting up graphics...", 0
 .ldfs:	db "Checking filesystem...", 0
-.rdy_msg:	db "Ready!", 0
+.rdy_msg:	db "Welcome to G00nOS!", 0
 .msg_bad_fs: db "Filesystem is invalid.",$0D,"Format? [Y/n]", 0
 .msg_os_quit: db "OS Exiting...", 0
 .msg_formatted: db "Formatted.", 0

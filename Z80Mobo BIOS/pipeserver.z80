@@ -281,7 +281,6 @@ _pipeserver_bdread:
 	in a, (c)
 	ld (hl), a
 	inc hl
-	nop
 	djnz .lop
 	
 	; tell the pipeserver to reset the index register
@@ -313,7 +312,6 @@ _pipeserver_bdwrite:
 	ld a, (hl)
 	out (c), a
 	inc hl
-	nop
 	djnz .lop
 	
 	; no need to reset the index register after a write

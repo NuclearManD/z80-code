@@ -21,6 +21,7 @@ yield:				equ $0038 ; Z80 interrupt mode 1 vector
 hex_to_int:			equ $003B
 byte_to_hex:		equ $003E
 hex_to_byte:		equ $0041
+strcpy:				equ $0044
 
 
 
