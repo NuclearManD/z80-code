@@ -1,10 +1,13 @@
 
 pipeserver_port: equ $90	; for reading from the keyboard
 
-VRAM_WORDS: equ 19200
+XRES: equ 484
+YRES: equ 400
+
+VRAM_WORDS: equ horiz_words*YRES
 
 font_ptr: equ rom_font ;equ $0000
-horiz_words: equ 60
+horiz_words: equ XRES/4
 
 text_cursor_x: db 0
 text_cursor_y: db 0
@@ -75,19 +78,19 @@ upd7220_setup: ; 240x320 (yes, more vertical pixels.)  for 8Mhz clock.
 	dec c
 	ld a, $10
 	call wr_upd7220
-	ld a, $3A
+	ld a, horiz_words - 2
 	call wr_upd7220
-	ld a, $86
+	ld a, $4E
 	call wr_upd7220
-	ld a, $24
+	ld a, $08
 	call wr_upd7220
-	ld a, $04
+	ld a, $07
 	call wr_upd7220
-	ld a, $3F
+	ld a, $0C
 	call wr_upd7220
-	ld a, $40
+	ld a, $90
 	call wr_upd7220
-	ld a, $5D
+	ld a, $8D
 	call wr_upd7220
 	inc c
 	ld a, $6F
@@ -95,7 +98,7 @@ upd7220_setup: ; 240x320 (yes, more vertical pixels.)  for 8Mhz clock.
 	ld a, $47
 	call wr_upd7220
 	dec c
-	ld a, $3C
+	ld a, $7A
 	call wr_upd7220
 	inc c
 	ld a, $70
@@ -104,9 +107,9 @@ upd7220_setup: ; 240x320 (yes, more vertical pixels.)  for 8Mhz clock.
 	ld a, $00
 	call wr_upd7220
 	call wr_upd7220
-	ld a, $C0
+	ld a, $00
 	call wr_upd7220
-	ld a, $14
+	ld a, $19
 	call wr_upd7220
 	inc c
 	ld a, $4B
