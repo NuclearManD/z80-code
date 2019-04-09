@@ -14,6 +14,13 @@ text_cursor_y: db 0
 
 maximum_x: equ horiz_words/2 - 1
 
+VSYNC_LINES:	equ 2
+HSYNC_WIDTH:	equ 15
+HFP_WIDTH:		equ 3
+
+SYNC_P4_CFG: equ 255&((VSYNC_LINES*32)|(HSYNC_WIDTH-1))
+SYNC_P5_CFG: equ 255&((VSYNC_LINES/4)|(4*(HFP_WIDTH-1)))
+
 gfx_text_curs_to_word: ; uses text_cursor value
 	push bc
 	push de
@@ -51,27 +58,22 @@ gfx_text_curs_to_word: ; uses text_cursor value
 
 wr_upd7220:
 	push bc
-	push af
+	ld b, a
 	
 .lopen:
-	nop    ; wait a few us for the upd7220 to think
-	nop
-	nop
-	nop
 	in a, ($80)
 	and 2
 	jp nz, .lopen
 	
-	ld b, 0
 	ld a, c
 	or $80
 	ld c, a
-	pop af
+	ld a, b
 	out (c), a
 	pop bc
 	ret
 
-upd7220_setup: ; 240x320 (yes, more vertical pixels.)  for 8Mhz clock.
+upd7220_setup: ; 240x320 (yes, more vertical pixels.)  for 16Mhz clock.
 	ld c, 1
 	xor a
 	call wr_upd7220
@@ -80,9 +82,9 @@ upd7220_setup: ; 240x320 (yes, more vertical pixels.)  for 8Mhz clock.
 	call wr_upd7220
 	ld a, horiz_words - 2
 	call wr_upd7220
-	ld a, $4E
+	ld a, SYNC_P4_CFG
 	call wr_upd7220
-	ld a, $08
+	ld a, SYNC_P5_CFG
 	call wr_upd7220
 	ld a, $07
 	call wr_upd7220
