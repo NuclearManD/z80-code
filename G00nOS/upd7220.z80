@@ -503,6 +503,8 @@ input:
 	jp z, .done
 	ld (hl), a
 	inc hl
+	cp CTRL_C
+	jp z, .done
 	jp .lopen
 .delete:
 	dec hl

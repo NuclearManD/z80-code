@@ -52,7 +52,9 @@ _bootloader:
 ; total here is 101 bytes
 os_str_buffer:		; use this otherwise wasted space as a string buffer
 dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ; another 50 bytes
+os_str_buffer_2:
 dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ; another 50 bytes
+os_str_buffer_3:
 dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ; another 50 bytes
 
 ; now 251 bytes
@@ -65,6 +67,12 @@ _jump_table:	; User programs use this and the BIOS jump table to control the com
 	jp gfx_fill			; $9106
 	jp gfx_newline		; $9109
 	jp gfx_indent		; $910C
+	
+	jp gfs_format		; $910F
+	jp ld_dir_table		; $9112
+	jp gfs_mkdir		; $9115
+	
+	jp system			; $9118
 
 ; ==================================================================
 ;
@@ -73,6 +81,10 @@ _jump_table:	; User programs use this and the BIOS jump table to control the com
 ; ==================================================================
 
 _entry:
+	ld hl, 0
+	add hl, sp
+	ld (os_quit.origin_sp), hl	; save sp
+	
 	ld hl, .error
 	call try
 	ld hl, .setup_gfx
@@ -92,37 +104,18 @@ _entry:
 .ready:
 	ld hl, .rdy_msg
 	call println
+
+	ld hl, 64	; allocate memory for the input
+	call alloc
+.terminal_loop:
+	ld a, '>'
+	call chrout
 	
-	ld hl, root_str
-	call ld_dir_table
-	ld de, GFS_root
-	ld hl, (main_disk)
-	call blockdevice.read
-	ld hl, (pipe_list)		; fix flash program (don't hack the BIOS...)
-	ld (term_outpipe), hl
-	ld hl, GFS_root
-	call print_memory
-	call set_pipes
+	call input	; get user input
+	call system	; process with system
 	
-	ld b, 64
-.loop:
-	call gfs_nextfile
-	call file_obj.isDir
-	jp z, .__next
-	call file_obj.get_name
-	call println
-.__next:
-	djnz .loop
-	
-.os_quit:
-	ld hl, .msg_os_quit
-	call println
-	
-	ld hl, (pipe_list)		; fix flash program (don't hack the BIOS...)
-	ld (term_outpipe), hl
-	ld (term_inpipe), hl
-	
-	ret						; enter flash program
+	;jp os_quit					; enter flash program
+	jp .terminal_loop
 .bad_fs:
 	ld hl, .msg_bad_fs
 	call print
@@ -133,7 +126,7 @@ _entry:
 	call gfx_newline
 	pop af
 	cp 'Y'
-	jr nz, .os_quit
+	jp nz, os_quit
 	
 	ld hl, .msg_enter_fs_size	; get size input from user
 	call print
@@ -152,20 +145,39 @@ _entry:
 	jp .ready
 .error:
 	call traceback
-	jp .os_quit
-	
-	
+	jp os_quit
 .setup_gfx: db "Setting up graphics...", 0
 .ldfs:	db "Checking filesystem...", 0
 .rdy_msg:	db "Welcome to G00nOS!", 0
 .msg_bad_fs: db "Filesystem is invalid.",$0D,"Format? [Y/n]", 0
-.msg_os_quit: db "OS Exiting...", 0
 .msg_formatted: db "Formatted.", 0
 .msg_enter_fs_size: db "FS sectors in hex >", 0
+
+; ==================================================================
+;
+; O S   S T O P
+;
+; ==================================================================
+
+os_quit:
+	ld hl, .msg_os_quit
+	call println
+	
+	ld hl, (pipe_list)		; fix flash program (don't hack the BIOS...)
+	ld (term_outpipe), hl
+	ld (term_inpipe), hl
+	
+	ld hl, (.origin_sp)
+	ld sp, hl
+	
+	ret
+.msg_os_quit: db "OS Exiting...", 0
+.origin_sp: dw 0
 
 include "upd7220.z80"
 include "math.z80"
 include "G00nFS.z80"
+include "misc.z80"
 
 set_pipes:
 	ld hl, gfx_pipe_obj ; gfx_pipe_obj can also be the keyboard

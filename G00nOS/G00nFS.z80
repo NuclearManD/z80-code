@@ -282,6 +282,9 @@ ld_dir_table:	; path in hl, sets the main disk's sector address to the first sec
 	pop bc ; get back saved counter
 	djnz .search_blockloop ; loop back to block searcher
 	; ... or not.  Throw exception because the directory was not found.
+	jr .not_found
+db 0, "ld_dir_tbl.fnf", 0
+.not_found:
 	call throw
 .found:
 	pop bc ; prevent stack corruption
@@ -657,9 +660,6 @@ gfs_mkfile:		; file name in hl, will create an empty file
 	ld de, (.to_zero)
 	push de
 	
-	call gfs_allocate_8_sectors		; allocate 8 sectors for the directory
-	ld (.to_zero), de
-	
 	ld hl, GFS_tmp_at				; get ready to make the AT empty
 	
 	xor a							; set first AT to zero to mark it as finished
@@ -678,24 +678,6 @@ gfs_mkfile:		; file name in hl, will create an empty file
 	call blockdevice.set_address
 	ld de, GFS_root
 	call blockdevice.write
-	
-	ld de, (.to_zero)				; set address for zeroing
-	call blockdevice.set_address
-	
-	ld de, GFS_root
-	xor a
-	ld b, a							; write 1 sector (256 bytes)
-	
-.zero_loop:							; zero the root
-	ld (de), a
-	inc de
-	djnz .zero_loop
-	
-	ld b, 8							; write next 8 sectors
-	ld de, GFS_root
-.wrdir_loop:
-	call blockdevice.write
-	djnz .wrdir_loop
 	
 	; All done!
 	pop hl

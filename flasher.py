@@ -114,7 +114,7 @@ def ldburn(fn):
     send256(make_256(binary[whole_sectors*256:]))
 
     wr_all()
-def testG00nOS(break_fs = True):
+def testG00nOS(break_fs = False):
     fn = "G00nOS/a.bin"
     f = open(fn, 'rb')
     binary = f.read()

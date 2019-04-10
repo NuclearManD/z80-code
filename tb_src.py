@@ -36,7 +36,14 @@ scan_jump_table(binary, 0, "_entry")
 scan_jump_table(binary, 3, "input (OS)")
 scan_jump_table(binary, 6, "gfx_fill")
 scan_jump_table(binary, 9, "gfx_newline")
-scan_jump_table(binary, 12, "gfx_fill")
+scan_jump_table(binary, 12, "gfx_indent")
+
+scan_jump_table(binary, 15, "gfs_format")
+scan_jump_table(binary, 18, "ld_dir_table")
+
+scan_jump_table(binary, 21, "gfs_mkdir")
+scan_jump_table(binary, 24, "system")
+
 print("Now type in your stack, bottom to top, or most recent call first.  Leave blank to end.")
 while True:
     inp = input(" > ")
@@ -52,6 +59,15 @@ HEAP_START = 0xA300
 HEAP_MAXIMUM = 0xE800
 print("Assuming OS is located between "+hex(OS_START)+" and "+hex(OS_END)+'.')
 
+if input("Clean trace to remove non-code stack elements?[Y/n]")=="Y":
+    i = 0
+    while i < len(tb_list):
+        v = tb_list[i]
+        if ((v<0x4000 and v>=0x100) # BIOS code segment, excluding first 256 bytes
+            or (v>=0x9100 and v<OS_END)):   # OS code segment, excluding bootloader
+            i+=1
+        else:
+            tb_list.pop(i)
 EXACT_MATCH_VECTOR = 0
 IN_HEAP = 1
 IN_OS = 2
@@ -77,6 +93,8 @@ def where_is(offset, can_be_call = True):
         return [IN_HEAP, "Heap, "+hex(offset-HEAP_START)]
     return [NOT_FOUND, "[unknown "+hex(offset)+"]"]
 def os_decode_to_str(offset):
+    og = offset-OS_START-3 # 
+    
     # this function disassembles call and jump instructions around the offset.
     offset-= 9 # 9 is 3 bytes for a call, 3 bytes for ld hl, **, and another 3 for ld de, **
     offset-=OS_START # our OS offset is zero, fix the given offset
@@ -88,6 +106,8 @@ def os_decode_to_str(offset):
             cmd = binary[b+offset]
             arg = binary[b+offset+1]|(binary[b+offset+2]<<8)
             stro+=hex(b+offset+OS_START)+" : "
+            if b+offset==og:
+                stro+="* "
             if cmd==0xCD:
                 stro+="CALL   "
             elif cmd==0xC3:
