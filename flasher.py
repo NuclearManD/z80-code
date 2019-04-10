@@ -50,7 +50,7 @@ def send256(buffer):
     printout()
     if type(buffer)==bytes and len(buffer)==256:
         ser.write(b"\x05")
-        time.sleep(0.001)
+        time.sleep(0.01)
         if(ser.inWaiting()>0):
             print("ERROR: Write failed; Flashing unexpected response!")
             return False
@@ -68,7 +68,7 @@ def send256(buffer):
                 break
             ser.write(buffer[i:i+8])
             ser.flush()
-            time.sleep(0.001)
+            time.sleep(0.002)
     else:
         print("ERROR: cannot write, invalid buffer!")
         return False

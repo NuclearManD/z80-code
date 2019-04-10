@@ -106,7 +106,7 @@ upd7220_setup: ; for 16Mhz clock.
 	ld a, $47
 	call wr_upd7220
 	dec c
-	ld a, $7A
+	ld a, horiz_words
 	call wr_upd7220
 	inc c
 	ld a, $70
