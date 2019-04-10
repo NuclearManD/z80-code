@@ -1,8 +1,8 @@
 
 pipeserver_port: equ $90	; for reading from the keyboard
 
-XRES: equ 416
-YRES: equ 400
+XRES: equ 400
+YRES: equ 320
 
 VRAM_WORDS: equ horiz_words*YRES
 
@@ -14,12 +14,18 @@ text_cursor_y: db 0
 
 maximum_x: equ horiz_words/2 - 1
 
-VSYNC_LINES:	equ 2
 HSYNC_WIDTH:	equ 15
 HFP_WIDTH:		equ 21
+HBP_WIDTH:		equ 8
 
-SYNC_P4_CFG: equ (VSYNC_LINES*32)+(HSYNC_WIDTH-1)
-SYNC_P5_CFG: equ (VSYNC_LINES/4)+(4*(HFP_WIDTH-1))
+VSYNC_LINES:	equ 3		; 2 for 488x400
+VFP_LINES:		equ 63		; 12 for 488x400
+VBP_LINES:		equ 63		; 35 for 488x400
+
+
+SYNC_P3_CFG: equ (VSYNC_LINES*32)+(HSYNC_WIDTH-1)
+SYNC_P4_CFG: equ (VSYNC_LINES/4)+(4*(HFP_WIDTH-1))
+SYNC_P8_CFG: equ (VBP_LINES*4) + (YRES/256)
 
 gfx_text_curs_to_word: ; uses text_cursor value
 	push bc
@@ -82,17 +88,17 @@ upd7220_setup: ; for 16Mhz clock.
 	call wr_upd7220
 	ld a, horiz_words - 2
 	call wr_upd7220
+	ld a, SYNC_P3_CFG
+	call wr_upd7220
 	ld a, SYNC_P4_CFG
 	call wr_upd7220
-	ld a, SYNC_P5_CFG
+	ld a, HBP_WIDTH - 1
 	call wr_upd7220
-	ld a, $07
+	ld a, VFP_LINES
 	call wr_upd7220
-	ld a, $0C
+	ld a, YRES - (YRES/256)*256
 	call wr_upd7220
-	ld a, $90
-	call wr_upd7220
-	ld a, $8D
+	ld a, SYNC_P8_CFG
 	call wr_upd7220
 	inc c
 	ld a, $6F

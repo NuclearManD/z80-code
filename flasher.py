@@ -6,8 +6,11 @@ hello_boot = b'!\x07\x90\xcd\x06\x00\xc9Hello World!\x00\x00\x00\x00\x00\x00\x00
 def reboot():
     ser.read_all()
     ser.write(b"\x01\x01") # send twice to confirm
-    time.sleep(1.2)
-    printout()
+    c=timeout_read(3)
+    while c!=b'\x00':
+        ser.write(b"\x01") # send reset command until received
+        c=timeout_read(3)
+    #printout()
 def wr_boot():
     ser.write(b"\xC0")
 def timeout_read(timeout = 0.3):
@@ -47,11 +50,11 @@ def send256(buffer):
     printout()
     if type(buffer)==bytes and len(buffer)==256:
         ser.write(b"\x05")
-        time.sleep(0.01)
+        time.sleep(0.001)
         if(ser.inWaiting()>0):
             print("ERROR: Write failed; Flashing unexpected response!")
             return False
-        for i in range(16):
+        for i in range(8):
             if(ser.inWaiting()>0):
                 printout()
                 send256(buffer)
@@ -59,14 +62,13 @@ def send256(buffer):
             ser.write(buffer[i:i+1])
             ser.flush()
             time.sleep(0.01)
-        for i in range(16,256,16):
+        for i in range(8,256,8):
             if(ser.inWaiting()>0):
                 printout()
-                send256(buffer)
                 break
-            ser.write(buffer[i:i+16])
+            ser.write(buffer[i:i+8])
             ser.flush()
-            time.sleep(0.02)
+            time.sleep(0.001)
     else:
         print("ERROR: cannot write, invalid buffer!")
         return False
@@ -125,7 +127,7 @@ def testG00nOS(break_fs = True):
 
     reboot()
 
-    time.sleep(10)
+    time.sleep(5)
 
     for i in range(0,whole_sectors*256,256):
         if not send256(binary[i:i+256]):
