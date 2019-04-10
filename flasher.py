@@ -124,17 +124,23 @@ def testG00nOS(break_fs = True):
         binary = binary+b'\x00'*(4096-len(binary))+bytes([255,255,255,255,255,255])
 
     whole_sectors = len(binary)//256
+    while True:
+        reboot()
 
-    reboot()
+        time.sleep(4)
 
-    time.sleep(5)
 
-    for i in range(0,whole_sectors*256,256):
-        if not send256(binary[i:i+256]):
-            return False
-    if not send256(make_256(binary[whole_sectors*256:])):
-        return False
-    
+        err = False
+        for i in range(0,whole_sectors*256,256):
+            if not send256(binary[i:i+256]):
+                err = True
+                break
+            time.sleep(0.001)
+        if err:
+            continue
+        if not send256(make_256(binary[whole_sectors*256:])):
+            continue
+        break
     time.sleep(0.5)
 
     if(ser.inWaiting()>0):

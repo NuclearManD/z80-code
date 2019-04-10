@@ -1,7 +1,7 @@
 
 pipeserver_port: equ $90	; for reading from the keyboard
 
-XRES: equ 400
+XRES: equ 408		; maximum resolution with 64KiB VRAM is 408x320
 YRES: equ 320
 
 VRAM_WORDS: equ horiz_words*YRES
