@@ -72,6 +72,8 @@ file_obj:
 		pop hl
 		pop bc
 		ret
+	;.write: ; expects object in hl, buffer in de, and size in bc
+	;	
 	.get_at:	; file object in hl, returns table sector in de
 		push bc
 		push hl
@@ -492,6 +494,7 @@ gfs_mkdir:		; directory name in hl
 	inc hl
 	ld (hl), d
 	inc hl
+	ld (.at_adr), de
 	
 	ld de, 2048						; size of a directory (8 sectors*256 bytes a sector)
 	ld (hl), e						; save it's size
@@ -509,10 +512,6 @@ gfs_mkdir:		; directory name in hl
 	ld de, (.to_zero)
 	push de
 	
-	
-	ld hl, (main_disk)
-	call blockdevice.set_address	; set current address to the AT address
-	
 	call gfs_allocate_8_sectors		; allocate 8 sectors for the directory
 	ld (.to_zero), de
 	
@@ -523,6 +522,7 @@ gfs_mkdir:		; directory name in hl
 	inc hl
 	ld (hl), d
 	inc hl
+	inc de
 	djnz .at_loop
 	
 	xor a							; set final AT to zero to mark it as finished
@@ -531,6 +531,8 @@ gfs_mkdir:		; directory name in hl
 	ld (hl), a
 	
 	ld hl, (main_disk)				; write the AT
+	ld de, (.at_adr)
+	call blockdevice.set_address	; set current address to the AT address
 	ld de, GFS_tmp_at
 	call blockdevice.write
 	
@@ -564,6 +566,145 @@ gfs_mkdir:		; directory name in hl
 	ret
 	
 .to_zero: dw 0
+.at_adr: dw 0
+
+gfs_mkfile:		; file name in hl, will create an empty file
+	push bc
+	push de
+	push hl
+	ld de, os_str_buffer
+	call get_parent_dir
+	ex de, hl
+	call ld_dir_table
+	push de						; save sector id
+
+	ld a, (GFS_ROOT_SECTORS)	; load directory sector count
+	ld b, a
+.search_blockloop:
+	ld de, GFS_root
+	ld hl, (main_disk)
+	call blockdevice.read
+	
+	push bc
+	ld b, 8
+	ld hl, GFS_root
+.search_entryloop:	; loop through the file entries
+	ld a, b
+	add b
+	add a
+	add a
+	add a
+	add a
+	ld l, a 						; address in sector of file entry in hl (can now use file objects)
+	
+	call file_obj.isDir
+	jr nz, .search_entryloop_e		; if directory then the slot is taken
+	call file_obj.isFile
+	jr z, .found					; We just found the slot for our new entry!
+	
+	; if file then the slot is taken, move on
+	
+.search_entryloop_e:
+	djnz .search_entryloop			; count with b
+									; [not found]
+	pop bc							; get back saved counter
+	djnz .search_blockloop			; loop back to block searcher
+									; ... or not.  Throw exception because there is not enough storage.
+	call throw
+.found:
+	pop bc							; first calculate the sector that the entry came from and push it
+	pop de
+	ex de, hl
+	ld a, 8
+	sub b
+	ld c, a
+	ld b, 0
+	add hl, bc
+	ex de, hl
+	push de
+	
+
+	ld a, file_obj._file_flag		; set only the file flag in the properties
+	ld (hl), a
+	xor a
+	inc hl
+	ld (hl), a
+	
+	inc hl							; now set the allocation table address
+	inc hl
+	inc hl
+	call gfs_allocate_new_sector	; allocate a sector for the AT
+	
+	ld (hl), e						; save it's address
+	inc hl
+	ld (hl), d
+	inc hl
+	ld (.at_adr), de
+	
+	ld de, 0						; size of an empty file
+	ld (hl), e						; save it's size
+	inc hl
+	ld (hl), d
+	
+	ld bc, 9						; add 9 to get file name offset
+	add hl, bc
+	pop de
+	ld (.to_zero), de 				; just use the temporary RAM
+	pop de
+	push de
+	ex de, hl
+	call get_final_element			; load name into file object
+	ld de, (.to_zero)
+	push de
+	
+	call gfs_allocate_8_sectors		; allocate 8 sectors for the directory
+	ld (.to_zero), de
+	
+	ld hl, GFS_tmp_at				; get ready to make the AT empty
+	
+	xor a							; set first AT to zero to mark it as finished
+	ld (hl), a
+	inc hl
+	ld (hl), a
+	
+	ld hl, (main_disk)				; write the AT
+	ld de, (.at_adr)
+	call blockdevice.set_address	; set current address to the AT address
+	
+	ld de, GFS_tmp_at
+	call blockdevice.write
+	
+	pop de							; write the previous root
+	call blockdevice.set_address
+	ld de, GFS_root
+	call blockdevice.write
+	
+	ld de, (.to_zero)				; set address for zeroing
+	call blockdevice.set_address
+	
+	ld de, GFS_root
+	xor a
+	ld b, a							; write 1 sector (256 bytes)
+	
+.zero_loop:							; zero the root
+	ld (de), a
+	inc de
+	djnz .zero_loop
+	
+	ld b, 8							; write next 8 sectors
+	ld de, GFS_root
+.wrdir_loop:
+	call blockdevice.write
+	djnz .wrdir_loop
+	
+	; All done!
+	pop hl
+	pop de
+	pop bc
+	ret
+	
+.to_zero: dw 0
+.at_adr: dw 0
 	
 gfs_nextfile:				; returns next file object in hl
 	push de
