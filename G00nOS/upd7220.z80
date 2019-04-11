@@ -27,6 +27,12 @@ SYNC_P3_CFG: equ (VSYNC_LINES*32)+(HSYNC_WIDTH-1)
 SYNC_P4_CFG: equ (VSYNC_LINES/4)+(4*(HFP_WIDTH-1))
 SYNC_P8_CFG: equ (VBP_LINES*4) + (YRES/256)
 
+text_rows:		equ 20
+free_text_rows:	equ text_rows-3
+
+hex_table:
+db "0123456789ABCDEF",0
+
 gfx_text_curs_to_word: ; uses text_cursor value
 	push bc
 	push de
@@ -416,6 +422,76 @@ gfx_wait_ready:
 	cp 4
 	jp nz, .ready_loop
 	pop af
+	ret
+
+print_memory:
+	push hl
+	push de
+	push bc
+	ld a, l
+	and $F0		; ensure that it is the beginning
+	ld l, a
+	ld a, ' '
+	call gfx_chr
+	call gfx_chr
+	call gfx_chr
+	call gfx_chr
+	ld a, '|'
+	call gfx_chr
+	push hl
+	ld hl, hex_table
+.write_head:
+	ld a, (hl)
+	or a
+	jr z, .write_done
+	inc hl
+	call gfx_chr
+	ld a, ' '
+	call gfx_chr
+	jp .write_head
+.write_done:
+	call gfx_newline
+	ld c, free_text_rows-1 ; number of rows to output
+	pop hl
+.row_start:
+	push hl
+	ld a, h
+	call byte_to_hex
+	ex de, hl
+	call gfx_print
+	pop hl
+	push hl
+	ld a, l
+	call byte_to_hex
+	ex de, hl
+	call gfx_print
+	ld a, '|'
+	call gfx_chr
+	pop hl
+.row_loop:
+	ld a, (hl)
+	push hl
+	call byte_to_hex
+	ex de, hl
+	call gfx_print
+	pop hl
+	inc hl
+	ld a, l
+	and $F
+	jr z, .row_loop_end
+	jp .row_loop
+	
+.row_loop_end:
+
+	ld a, 13
+	call gfx_chr
+	dec c
+	ld a, c
+	or a
+	jp nz, .row_start
+	pop bc
+	pop de
+	pop hl
 	ret
 
 gfx_chr:

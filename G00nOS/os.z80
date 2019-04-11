@@ -111,10 +111,20 @@ _entry:
 	ld a, '>'
 	call chrout
 	
+	ld hl, .terminal_error	; don't crash OS if there is an error
+	call try
+	
 	call input	; get user input
 	call system	; process with system
 	
+	call notry	; catch errors normally again
+	
 	;jp os_quit					; enter flash program
+	jp .terminal_loop
+.terminal_error:
+	ld hl, .term_err_msg
+	call println
+	call traceback
 	jp .terminal_loop
 .bad_fs:
 	ld hl, .msg_bad_fs
@@ -152,6 +162,7 @@ _entry:
 .msg_bad_fs: db "Filesystem is invalid.",$0D,"Format? [Y/n]", 0
 .msg_formatted: db "Formatted.", 0
 .msg_enter_fs_size: db "FS sectors in hex >", 0
+.term_err_msg: db "Error executing command!",$D, 0
 
 ; ==================================================================
 ;

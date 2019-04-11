@@ -6,7 +6,7 @@ input_old:			equ $000C
 strcomp:			equ $000F
 chrin:				equ $0012
 chrout:				equ $0015
-print_memory:		equ $0018
+print_memory_bios:	equ $0018
 	
 try:				equ $001B
 notry:				equ $001E

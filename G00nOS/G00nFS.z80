@@ -426,6 +426,88 @@ get_final_element: ; Gets final element of a path.  Give original path in hl and
 	
 	
 	
+gfs_rm:		; file/dir name in hl
+	push bc
+	push de
+	push hl
+	ld de, os_str_buffer
+	call get_parent_dir
+	ex de, hl
+	call ld_dir_table
+	pop hl						; restore hl
+	push hl
+	push de						; save sector id
+	ld de, os_str_buffer
+	call get_final_element		; get filename in os_str_buffer
+
+	ld a, (GFS_ROOT_SECTORS)	; load directory sector count
+	ld b, a
+.search_blockloop:
+	ld de, GFS_root
+	ld hl, (main_disk)
+	call blockdevice.read
+	
+	push bc
+	ld b, 8
+	ld hl, GFS_root
+.search_entryloop:	; loop through the file entries
+	ld a, b
+	add b
+	add a
+	add a
+	add a
+	add a
+	ld l, a 						; address in sector of file entry in hl (can now use file objects)
+	
+	call file_obj.isDir
+	jr nz, .search_entryloop_e		; if directory then the slot is taken
+	call file_obj.isFile
+	jr nz, .search_entryloop_e		; We just found the slot for our new entry!
+	ld de, os_str_buffer
+	push hl
+	call file_obj.get_name
+	call strcomp
+	pop hl
+	jp z, .found
+	
+	; if file then the slot is taken, move on
+	
+.search_entryloop_e:
+	djnz .search_entryloop			; count with b
+									; [not found]
+	pop bc							; get back saved counter
+	djnz .search_blockloop			; loop back to block searcher
+									; ... or not.  Throw exception because there is not enough storage.
+	call throw
+.found:
+	pop bc							; first calculate the sector that the entry came from and push it
+	pop de
+	ex de, hl
+	ld a, 8
+	sub b
+	ld c, a
+	ld b, 0
+	add hl, bc
+	ex de, hl
+	push de
+	
+
+	xor a							; remove file properties
+	ld (hl), a
+	inc hl
+	ld (hl), a
+	
+	pop de							; write the previous root
+	call blockdevice.set_address
+	ld de, GFS_root
+	call blockdevice.write
+	
+	; All done!
+	pop hl
+	pop de
+	pop bc
+	ret
+	
 gfs_mkdir:		; directory name in hl
 	push bc
 	push de
@@ -687,6 +769,8 @@ gfs_mkfile:		; file name in hl, will create an empty file
 	
 .to_zero: dw 0
 .at_adr: dw 0
+
+
 	
 gfs_nextfile:				; returns next file object in hl
 	push de

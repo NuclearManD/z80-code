@@ -28,6 +28,14 @@ system:		; command in hl
 	call strcomp
 	jp z, .cmd_mkdir
 	
+	ld hl, .cmd_rm_str
+	call strcomp
+	jp z, .cmd_rm
+	
+	ld hl, .cmd_rdmem_str
+	call strcomp
+	jp z, .cmd_rdmem
+	
 	ld hl, .cmd_flash_str
 	call strcomp
 	jp z, os_quit
@@ -65,7 +73,7 @@ system:		; command in hl
 	jp .done
 .cmd_ls:
 	ld hl, (.token_op)
-	ld de, os_str_buffer
+	ld de, os_str_buffer_3
 	call get_token
 	ex de, hl
 	
@@ -130,12 +138,48 @@ db 0,"system.ls_clutch", 0
 	call gfs_mkdir
 	
 	jp .done
+.cmd_rdmem:
+	ld hl, (.token_op)		; get argument
+	ld de, os_str_buffer_3
+	call get_token
+	
+	ld a, (de)				; is there an argument?
+	or a
+	jp z, .rdmem_usage		; go to .format_usage if not
+	
+	ld hl, os_str_buffer_3
+	call hex_to_int
+	
+	call print_memory
+	
+	jp .done
+.cmd_rm:
+	ld hl, (.token_op)		; get argument
+	ld de, os_str_buffer_3
+	call get_token
+	ex de, hl
+	
+	ld a, (hl)				; is there an argument?
+	or a
+	jp z, .rm_usage		; go to .mkdir_usage if not
+	
+	call gfs_rm
+	
+	jp .done
 .format_usage:
 	ld hl, .format_usage_str
 	call println
 	jp .done
 .mkdir_usage:
 	ld hl, .mkdir_usage_str
+	call println
+	jp .done
+.rm_usage:
+	ld hl, .rm_usage_str
+	call println
+	jp .done
+.rdmem_usage:
+	ld hl, .rdmem_usage_str
 	call println
 	jp .done
 .token_op: dw 0
@@ -145,10 +189,13 @@ db 0,"system.ls_clutch", 0
 .cmd_cls_str: db "cls", 0
 .cmd_mkdir_str: db "mkdir", 0
 .cmd_rm_str: db "rm", 0
+.cmd_rdmem_str: db "rdmem", 0
 .commandNotFound: db "Command not found: ", 0
 
 .format_usage_str: db "Usage: format [num sectors in hex]", 0
 .mkdir_usage_str: db "Usage: mkdir [dirpath]", 0
+.rm_usage_str: db "Usage: rm [path]", 0
+.rdmem_usage_str: db "Usage: rdmem [adr in hex]", 0
 
 
 get_token:	; arguments: source in hl, destination in de.  Returns: hl is pointer of next string
