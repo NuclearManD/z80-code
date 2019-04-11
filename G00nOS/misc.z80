@@ -144,6 +144,7 @@ db 0,"system.ls_clutch", 0
 .cmd_ls_str: db "ls", 0
 .cmd_cls_str: db "cls", 0
 .cmd_mkdir_str: db "mkdir", 0
+.cmd_rm_str: db "rm", 0
 .commandNotFound: db "Command not found: ", 0
 
 .format_usage_str: db "Usage: format [num sectors in hex]", 0
