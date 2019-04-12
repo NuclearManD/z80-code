@@ -111,8 +111,10 @@ _entry:
 	ld a, '>'
 	call chrout
 	
+	push hl	; save input RAM
 	ld hl, .terminal_error	; don't crash OS if there is an error
 	call try
+	pop hl ; resore input RAM
 	
 	call input	; get user input
 	call system	; process with system

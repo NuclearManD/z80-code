@@ -11,8 +11,8 @@ GFS_NEXT_FREE_SECTOR: equ GFS_head+6
 GFS_head_sector: equ 16 ; first 16 sectors are for the OS
 GFS_root_start: equ 17
 
-GFS_root: equ os_end+$100
-GFS_tmp_at: equ os_end+$200 ; allocation table
+GFS_root: equ $A100
+GFS_tmp_at: equ $A200 ; allocation table
 
 file_obj:
 	.size: equ $20
@@ -227,13 +227,12 @@ ld_dir_table:	; path in hl, sets the main disk's sector address to the first sec
 	
 .dump_loop:
 	ld a, (hl)
-	or a
-	jr z, .dump_done
-	inc hl
 	cp '/'
-	jr z,.dump_loop
+	jr nz,.dump_done
+	inc hl
+	jp .dump_loop
 .dump_done:
-
+	call println
 	ld (.path_ptr), hl ; save pointer
 	
 	; uneeded chars have been dumped.  Load the root directory
@@ -277,6 +276,11 @@ ld_dir_table:	; path in hl, sets the main disk's sector address to the first sec
 	pop hl			; load file object pointer
 	jp z, .found
 .search_entryloop_e:
+
+	;push hl
+	;call file_obj.get_name
+	;call println
+	;pop hl
 	djnz .search_entryloop	; count with b
 	; not found
 	pop bc ; get back saved counter
@@ -490,7 +494,6 @@ gfs_rm:		; file/dir name in hl
 	add hl, bc
 	ex de, hl
 	push de
-	
 
 	xor a							; remove file properties
 	ld (hl), a
@@ -545,6 +548,7 @@ gfs_mkdir:		; directory name in hl
 	; if file then the slot is taken, move on
 	
 .search_entryloop_e:
+	
 	djnz .search_entryloop			; count with b
 									; [not found]
 	pop bc							; get back saved counter
@@ -771,7 +775,7 @@ gfs_mkfile:		; file name in hl, will create an empty file
 .at_adr: dw 0
 
 
-	
+
 gfs_nextfile:				; returns next file object in hl
 	push de
 	push bc
@@ -829,6 +833,91 @@ gfs_nextfile:				; returns next file object in hl
 	
 .index: db 0
 .sector: dw 0
+
+gfs_lsfiles_str:	; hl is directory, de is buffer to store string (may take up a decent amount of RAM - be careful.) 
+	push bc
+	push de
+	push hl
+	push de						; save destination on the stack
+	call ld_dir_table
+
+	ld a, (GFS_ROOT_SECTORS)	; load directory sector count
+	ld b, a
+	pop hl						; get the destination off of the stack
+.search_blockloop:
+	push hl
+	
+	ld de, GFS_root
+	ld hl, (main_disk)
+	call blockdevice.read
+	
+	pop hl
+	
+	push bc
+	ld b, 8
+	ld ix, GFS_root
+	ld de, 16
+.search_entryloop:	; loop through the file entries
+	ld a, (ix)
+	and 3
+	jp z, .next
+	push af
+	add ix, de		; add 16 to get the filename string
+	call .copy
+	
+	pop af			; file or directory?
+	and 1
+	jp nz, .file
+	
+	ld a, '/'
+	ld (hl), a
+	inc hl
+.file:
+
+	ld a, ' '
+	ld (hl), a
+	inc hl
+	
+	add ix, de		; add 16 to get the next file object
+	
+	
+.search_entryloop_e:
+	djnz .search_entryloop			; count with b
+									; [not found]
+	pop bc							; get back saved counter
+	djnz .search_blockloop			; loop back to block searcher
+	
+									; all done!
+	dec hl							; zero out the last byte, where there was a space put
+	xor a
+	ld (hl), a
+	
+	pop hl
+	pop de
+	pop bc
+	ret
+.copy:								; copy subfunction, copies up to 16 bytes from ix to hl (saving ix only)
+	push ix
+	push bc
+	ld b, 16
+.clop:
+	ld a, (ix)
+	or a
+	jr z, .cdone
+	ld (hl), a
+	inc hl
+	inc ix
+	djnz .clop
+.cdone:
+	pop bc
+	pop ix
+	ret
+	
+.next:
+	add ix, de
+	add ix, de		; add 32 to get the next file object
+	jp .search_entryloop_e
+	
 	
 gfs_allocate_new_sector:		; returns new sector id in de
 	push hl

@@ -65,8 +65,8 @@ system:		; command in hl
 	ex de, hl
 	call hex_to_int
 	
-	ld b, h
-	ld c, l
+	ld b, d
+	ld c, e
 	ld hl, (main_disk)
 	call gfs_format
 	
@@ -84,42 +84,13 @@ system:		; command in hl
 	; oterwise use root_str
 	ld hl, root_str
 .ls_has_arg:
+	ld de, os_str_buffer_2
 	jp .ls_clutch
 db 0,"system.ls_clutch", 0
 .ls_clutch:
-	call ld_dir_table
-	ld de, GFS_root
-	ld hl, (main_disk)
-	call blockdevice.read
-	
-	ld b, 64
-.ls_loop:
-	call gfs_nextfile
-	call file_obj.isDir
-	jp nz, .ls_pdir
-	call file_obj.isFile
-	jp nz, .ls_pfile
-.ls__next:
-	djnz .ls_loop
-	
-	ld a, $0D
-	call chrout
-	
-	jp .done
-.ls_pdir:
-	call file_obj.get_name
-	call print
-	ld a, '/'
-	call chrout
-	ld a, ' '
-	call chrout
-	jp .ls__next
-.ls_pfile:
-	call file_obj.get_name
-	call print
-	ld a, ' '
-	call chrout
-	jp .ls__next
+	call gfs_lsfiles_str
+	ld hl, os_str_buffer_2
+	call println
 .done:
 	pop hl
 	pop de
@@ -149,6 +120,7 @@ db 0,"system.ls_clutch", 0
 	
 	ld hl, os_str_buffer_3
 	call hex_to_int
+	ex de, hl
 	
 	call print_memory
 	

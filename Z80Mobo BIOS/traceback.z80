@@ -12,29 +12,19 @@ os_setup_tracer:
 	ld (catch_sp), hl
 	ret
 try:
-	push hl
-	push de
-	push bc
 	ld (tmp_sp), sp
 	ld sp, (catch_sp)
 	push hl
 	ld (catch_sp), sp
 	ld sp, (tmp_sp)
-	pop bc
-	pop de
-	pop hl
 	ret
 notry:
 	push hl
-	push de
-	push bc
 	ld (tmp_sp), sp
 	ld sp, (catch_sp)
 	pop hl
 	ld (catch_sp), sp
 	ld sp, (tmp_sp)
-	pop bc
-	pop de
 	pop hl
 	ret
 throw_pipe_read_error:
