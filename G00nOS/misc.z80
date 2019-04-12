@@ -1,6 +1,18 @@
 
 CTRL_C: equ 3
 
+; Commands to add:
+;
+;	mv
+;	cp
+;	du
+;	chmod (difference: raw G00nFS file properties are changed, so a file can be made into a direcory or vice versa, weird stuff)
+;	
+;	
+;	
+;	
+;	
+
 system:		; command in hl
 	push bc
 	push de
