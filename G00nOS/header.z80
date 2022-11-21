@@ -1,36 +1,33 @@
-reboot:				equ $0000
-print:				equ $0003
-println:			equ $0006
-alloc:				equ $0009
-input_old:			equ $000C
-strcomp:			equ $000F
-chrin:				equ $0012
-chrout:				equ $0015
+reboot:			equ $0000
+print:			equ $0003
+println:		equ $0006
+alloc:			equ $0009
+input_old:		equ $000C
+strcomp:		equ $000F
+chrin:			equ $0012
+chrout:			equ $0015
 print_memory_bios:	equ $0018
-	
-try:				equ $001B
-notry:				equ $001E
-throw:				equ $0021
-traceback:			equ $0024
-strlen:				equ $0028
+
+try:			equ $001B
+notry:			equ $001E
+throw:			equ $0021
+traceback:		equ $0024
+strlen:			equ $0028
 blockdevice.read:	equ $002B
 blockdevice.write:	equ $002E
-blockdevice.set_address: equ $0031
+blockdevice.set_address:equ $0031
 int_to_hex: 		equ $0034
-yield:				equ $0038 ; Z80 interrupt mode 1 vector
-hex_to_int:			equ $003B
+yield:			equ $0038 ; Z80 interrupt mode 1 vector
+hex_to_int:		equ $003B
 byte_to_hex:		equ $003E
 hex_to_byte:		equ $0041
-strcpy:				equ $0044
+strcpy:			equ $0044
 
-
-
-boot:		equ $9000 ; where the BIOS loads the OS
-rom_font:	equ $4000 ; the BIOS ROM font
-
-term_inpipe:	equ $8006	; no user program should mess with these.  For the OS, BIOS, and drivers only.
-term_outpipe:	equ $8008
+boot:			equ $9000 ; where the BIOS loads the OS
+rom_font:		equ $4000 ; the BIOS ROM font
+term_inpipe:		equ $8006 ; no user program should mess with these.  For the OS, BIOS, and drivers only.
+term_outpipe:		equ $8008
 pipe_list:		equ $810C
-bd_list_cnt:	equ $8202
+bd_list_cnt:		equ $8202
 bd_list:		equ $8204
 main_disk:		equ $8240
