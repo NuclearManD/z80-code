@@ -1,982 +1,1103 @@
 ; G00N File System (GFS) driver		:3
-
-minimum_gfs_sector_count: equ 20 ; 16 sectors for OS + 1 for head + 1 for root + 1 AT + 1 file sector
-
-GFS_head: equ $A000 ; End of loaded OS and 768 bytes before the BIOS heap bottom, so we can store 3 sectors here.
-GFS_NROOT: equ GFS_head
-GFS_NSECTORS: equ GFS_head+2
-GFS_ROOT_SECTORS: equ GFS_head+4
-GFS_NEXT_FREE_SECTOR: equ GFS_head+6
-
-GFS_head_sector: equ 16 ; first 16 sectors are for the OS
-GFS_root_start: equ 17
-
-GFS_root: equ $A100
-GFS_tmp_at: equ $A200 ; allocation table
-
+;
+minimum_gfs_sector_count:	equ 20		; 16 sectors for OS + 1 for head + 1 for root + 1 AT + 1 file sector
+;
+GFS_head:			equ $A000	; End of loaded OS and 768 bytes before the BIOS heap bottom, so we can store 3 sectors here.
+GFS_NROOT: 			equ GFS_head
+GFS_NSECTORS: 			equ GFS_head+2
+GFS_ROOT_SECTORS: 		equ GFS_head+4
+GFS_NEXT_FREE_SECTOR:		equ GFS_head+6
+;
+GFS_head_sector:		equ 16		; first 16 sectors are for the OS
+GFS_root_start: 		equ 17
+;
+GFS_root:			equ $A100
+GFS_tmp_at:			equ $A200	; allocation table
+;
 file_obj:
-	.size: equ $20
-	.properties:	equ $00
-	.hash:			equ $02 ; NOTE: this is OPTIONAL.  Not all files will have it.
-	.alloc_tbl_adr:	equ $04
+	.size: 			equ $20
+	.properties:		equ $00
+	.hash:			equ $02		; NOTE: this is OPTIONAL.  Not all files will have it.
+	.alloc_tbl_adr:		equ $04
 	.size_off:		equ $06
-	
-	._file_flag:	equ $01
+;
+	._file_flag:		equ $01
 	._dir_flag:		equ $02
-	._krypt_flag:	equ $04
-	
+	._krypt_flag:		equ $04
+;
 	.name_off:		equ $10
-	.get_name:	; expects object in hl, returns name in hl
-		push bc
-		ld bc, .name_off
-		add hl, bc
-		pop bc
-		ret
-	.isFile:	; expects object in hl, resets zero flag if true
-		ld a, (hl)
-		and ._file_flag
-		ret
-	.isDir:	; expects object in hl, resets zero flag if true
-		ld a, (hl)
-		and ._dir_flag
-		ret
-	.getSize: ; expects object in hl.  Returns in bc.
-		push hl
-		ld bc, .size_off
-		add hl, bc
-		ld c, (hl)
-		inc hl
-		ld b, (hl)
-		pop hl
-		ret
-	.read: ; expects object in hl and buffer in de
-		push bc
-		push hl
-		push de
-		
-		push de
-		
-		call file_obj.get_at
-		
-		call .getSize
-		ld a, c
-		or a
-		ld a, b
-		jp z, ._noAdd1
-		inc a
-	._noAdd1:
-		pop hl
-		call read_into_from_at
-		
-		pop de
-		pop hl
-		pop bc
-		ret
-	;.write: ; expects object in hl, buffer in de, and size in bc
-	;	
-	.get_at:	; file object in hl, returns table sector in de
-		push bc
-		push hl
-		
-		ld bc, .alloc_tbl_adr
-		add hl, bc
-		
-		ld e, (hl)
-		inc hl
-		ld d, (hl)
-		
-		pop hl
-		pop bc
-		ret
-		
+;
+.get_name:	; expects object in hl,returns name in hl
+	push	bc
+	ld	bc,.name_off
+	add	hl,bc
+	pop	bc
+	ret
+;
+.isFile:	; expects object in hl,resets zero flag if true
+	ld	a,(hl)
+	and	._file_flag
+	ret
+;
+.isDir:		; expects object in hl,resets zero flag if true
+	ld	a,(hl)
+	and	._dir_flag
+	ret
+;
+.getSize:	; expects object in hl.  Returns in bc.
+	push	hl
+	ld	bc,.size_off
+	add	hl,bc
+	ld	c,(hl)
+	inc	hl
+	ld	b,(hl)
+	pop	hl
+	ret
+;
+.read:		; expects object in hl and buffer in de
+	call	pushpair		; pushes all register pairs and setup stack to call poppair on return
+;
+	push	de
+;
+	call	file_obj.get_at
+;
+	call	.getSize
+	ld	a,c
+	or	a
+	ld	a,b
+	jr	z,._noAdd1
+;
+	inc	a
+;
+._noAdd1:
+	pop	hl
+	jr	read_into_from_at
+;
+;.write:	; expects object in hl, buffer in de and size in bc
+;
+.get_at:	; file object in hl,returns table sector in de
+	push	bc
+	push	hl
+;
+	ld	bc,.alloc_tbl_adr
+	add	hl,bc
+;
+	ld	e,(hl)
+	inc	hl
+	ld	d,(hl)
+;
+	pop	hl
+	pop	bc
+;
+	ret
+;
 read_into_from_at:	; 'at' means allocation table. Store AT address in de and number of sectors in a, buffer address in hl
-	push de
-	push bc
-	push hl
-	push af
-	
-	ld hl, (main_disk)
-	call blockdevice.set_address
-	
-	ld de, GFS_tmp_at
-	call blockdevice.read			; read the AT
-	ld (.ptr), de					; save AT pointer
-	
-	pop af
-	pop de
-	ld b, a							; load so many sectors
-.loop:
-	push de
-	
-	ld hl, (.ptr)		; get next sector in de and increment the index
-	ld e, (hl)
-	inc hl
-	ld d, (hl)
-	inc hl
-	ld (.ptr), hl
-	
-	ld hl, (main_disk)	; read the sector into the buffer
-	call blockdevice.set_address
-	pop de
-	call blockdevice.read
-	
-	ld a, d				; add 256 bytes to buffer pointer and push
-	inc a
-	ld d, a
-	
-	djnz .loop			; if all sectors are read then break the loop
-	
-	pop bc
-	pop de
+	push	de
+	push	bc
+	push	hl
+;
+	push	af
+;
+	ld	hl,(main_disk)
+	call	blockdevice.set_address
+;
+	ld	de,GFS_tmp_at
+	call	blockdevice.read	; read the AT
+	ld	(.ptr),de		; save AT pointer
+;
+	pop	af
+	pop	de
+;
+	ld	b,a			; load so many sectors
+.loop:	push	de
+;
+	ld	hl,(.ptr)		; get next sector in de and increment the index
+	ld	e,(hl)
+	inc	hl
+	ld	d,(hl)
+	inc	hl
+	ld	(.ptr),hl
+;
+	ld	hl,(main_disk)		; read the sector into the buffer
+	call	blockdevice.set_address
+;
+	pop	de
+;
+	call	blockdevice.read
+;
+	inc	d			; add	256 bytes to buffer pointer and	push
+;
+	djnz	.loop			; if all sectors are read then break the loop
+;
+	pop	bc
+	pop	de
 	ret
-.ptr: dw 0
-
+;
+.ptr:	dw	0
+;
 gfs_format:				; reformat the block device hl.  Max filesystem size in bc, BE CAREFUL: Erases all data!
-	push de
-	push bc
-	push hl
-	push hl
-	ld hl, 0
-	ld (GFS_NROOT), hl
-	ld h, b
-	ld l, c
-	ld (GFS_NSECTORS), hl
-	ld hl, 8	; 8 sectors * 8 entries/sector = 64 entries in root directory
-	ld (GFS_ROOT_SECTORS), hl
-	ld hl, 25	; 25 used sectors (16 OS + 8 root sectors + 1 head sector)
-	ld (GFS_NEXT_FREE_SECTOR), hl
-	pop hl
-	ld de, GFS_head_sector
-	call blockdevice.set_address
-	ld de, GFS_head
-	call blockdevice.write
-	
-	xor a
-	ld b, a
-	ld de, GFS_root
-.zero_loop:			; zero out the root memory so we can write zeros to disk
-	ld (de), a
-	inc de
-	djnz .zero_loop
-	
+	call	pushpair		; pushes all register pairs and setup stack to call poppair on return
+;
+	push	hl
+;
+	ld	hl,0
+	ld	(GFS_NROOT),hl
+;
+	ld	(GFS_NSECTORS),bc
+;
+	ld	hl,8			; 8 sectors * 8 entries/sector = 64 entries in root directory
+	ld	(GFS_ROOT_SECTORS),hl
+;
+	ld	hl,25			; 25 used sectors (16 OS + 8 root sectors + 1 head sector)
+	ld	(GFS_NEXT_FREE_SECTOR),hl
+;
+	pop	hl
+;
+	ld	de,GFS_head_sector
+	call	blockdevice.set_address
+;
+	ld	de,GFS_head
+	call	blockdevice.write
+;
+	xor	a
+	ld	b,a
+	ld	de,GFS_root
+.zero_loop:				; zero out the root memory so we can write zeros to disk
+	ld	(de), a
+	inc	de
+	djnz	.zero_loop
+;
 	; now write the root sectors
-	ld b, 8
-	ld de, GFS_root
+	ld	b,8
+	ld	de,GFS_root
 .wr_loop:
-	call blockdevice.write
-	djnz .wr_loop
-	
-	; Done.  Root dir is zeroed and the head is valid.
-	
-	
-	pop hl
-	pop bc
-	pop de
+	call	blockdevice.write
+	djnz	.wr_loop
+;
+	; Done.  Root dir is zeroed and	the head is valid.
+;
 	ret
-gfs_check_fs: ; check the block device hl. z set for valid, reset for invalid.
-	push de
-	push bc
-	push hl
-	
-	ld de, GFS_head_sector			; read FS head
-	call blockdevice.set_address
-	ld de, GFS_head
-	call blockdevice.read
-	
-	ld bc, (GFS_NROOT)
-	ld hl, (GFS_ROOT_SECTORS)
-	
-	add hl, hl
-	jr c, .nope
-	add hl, hl
-	jr c, .nope
-	add hl, hl	; hl now contains the maximum number of root entries
-	jr c, .nope
-	or a	; reset carry
-	sbc hl, bc
-	
-	jr c, .nope	; Invalid if there are more root entries than possible
-	
-	ld hl, (GFS_NSECTORS)
-	ld bc, minimum_gfs_sector_count
-	or a
-	sbc hl, bc
-	jr c, .nope
-	
-	pop hl
-	pop bc
-	pop de
-	
-	xor a
+;
+gfs_check_fs:	; check the block device hl. z set for valid, reset for invalid.
+	call	pushpair		; pushes all register pairs and setup stack to call poppair on return
+;
+	ld	de,GFS_head_sector	; read FS head
+	call	blockdevice.set_address
+;
+	ld	de,GFS_head
+	call	blockdevice.read
+;
+	ld	bc, (GFS_NROOT)
+	ld	hl,(GFS_ROOT_SECTORS)
+;
+	xor	a			;assume zero (no error) result (optimist!)
+;
+	add	hl,hl
+	jr	c,.nope
+;
+	add	hl,hl
+	jr	c,.nope
+;
+	add	hl,hl			; hl now contains the maximum number of root entries
+	jr	c,.nope
+;
+	or	a			; clear carry
+	sbc	hl,bc
+;
+	jp	c,.nope			; Invalid if there are more root entries than possible
+;
+	ld	hl,(GFS_NSECTORS)
+	ld	bc, minimum_gfs_sector_count
+;
+	xor	a
+	sbc	hl,bc
+;
+.nope:	adc	a,a			;move carry (borrow) into lsbit of acc for z/nz (error) result
 	ret
-.nope:
-	pop hl
-	pop bc
-	pop de
-	xor a
-	inc a
-	ret
-
-ld_dir_table:	; path in hl, sets the main disk's sector address to the first sector of the requested directory or file.
-				; Returns first sector address in de and resets the file object counter.
-	push bc
-	push hl
-	
-	xor a
-	ld (gfs_nextfile.index), a
-	
+;
+ld_dir_table:	; path in hl,sets the main disk's sector address to the first sector of the requested directory or file.
+		; Returns first sector address in de and resets the file object counter.
+	push	bc
+	push	hl
+;
+	xor	a
+	ld	(gfs_nextfile.index), a
+;
 .dump_loop:
-	ld a, (hl)
-	cp '/'
-	jr nz,.dump_done
-	inc hl
-	jp .dump_loop
+	ld	a, (hl)
+	cp	'/'
+	jr	nz,.dump_done
+;
+	inc	hl
+	jr	.dump_loop
+;
 .dump_done:
-	call println
-	ld (.path_ptr), hl ; save pointer
-	
+	call	println
+	ld	(.path_ptr),hl		; save pointer
+;
 	; uneeded chars have been dumped.  Load the root directory
-	ld de, GFS_root_start
+	ld	de,GFS_root_start
 .load_loop:
 	; set the sector address
-	ld hl, (main_disk)
-	call blockdevice.set_address
-	
-	ld hl, (.path_ptr)
-	
-	ld a, (hl)
-	or a
-	jp z, .done
-	
-	ld a, (GFS_ROOT_SECTORS) ; load directory sector count
-	ld b, a
+	ld	hl,(main_disk)
+	call	blockdevice.set_address
+;
+	ld	hl,(.path_ptr)
+;
+	ld	a, (hl)
+	or	a
+	jr	z,.done
+;
+	ld	a, (GFS_ROOT_SECTORS)	; load directory sector count
+	ld	b,a
 .search_blockloop:
-	ld de, GFS_root
-	ld hl, (main_disk)
-	call blockdevice.read
-	
-	push bc
-	ld b, 8
-	ld hl, GFS_root
-.search_entryloop:	; loop through the file entries
-	ld a, b
-	add b
-	add a
-	add a
-	add a
-	add a
-	ld l, a 		; address in sector of file entry in hl (can now use file objects)
-	
-	call file_obj.isDir
-	jr z, .search_entryloop_e ; move on
-	push hl			; save file object pointer
-	call file_obj.get_name
-	ld de, (.path_ptr)
-	call comp_path_root
-	pop hl			; load file object pointer
-	jp z, .found
+	ld	de,GFS_root
+	ld	hl,(main_disk)
+	call	blockdevice.read
+;
+	push	bc
+;
+	ld	b,8
+	ld	hl,GFS_root
+.search_entryloop:			; loop through the file entries
+	ld	a, b
+	add	a
+	add	a
+	add	a
+	add	a
+	add	a
+	ld	l, a 			; address in sector of file entry in hl (can now use file objects)
+;
+	call	file_obj.isDir
+	jr	z,.search_entryloop_e	; move on
+;
+	push	hl			; save file object pointer
+;
+	call	file_obj.get_name
+;
+	ld	de,(.path_ptr)
+	call	comp_path_root
+;
+	pop	hl			; load file object pointer
+;
+	jr	z,.found
+;
 .search_entryloop_e:
-
-	;push hl
-	;call file_obj.get_name
-	;call println
-	;pop hl
-	djnz .search_entryloop	; count with b
+;
+	;push	hl
+	;call	file_obj.get_name
+	;call	println
+	;pop	hl
+;
+	djnz	.search_entryloop	; count with b
+;
 	; not found
-	pop bc ; get back saved counter
-	djnz .search_blockloop ; loop back to block searcher
+	pop	bc			; get back saved counter
+;
+	djnz	.search_blockloop	; loop back to block searcher
+;
 	; ... or not.  Throw exception because the directory was not found.
-	jr .not_found
-db 0, "ld_dir_tbl.fnf", 0
+	jr	.not_found
+;
+	db	0, "ld_dir_tbl.fnf", 0
+;
 .not_found:
-	call throw
+	call	throw
 .found:
-	pop bc ; prevent stack corruption
-	; found it!  Get the AT address and load the AT
-	call file_obj.get_at
-	ld hl, (main_disk)
-	call blockdevice.set_address
-	ld de, GFS_TMP_AT ; store in the temporary AT memory
-	call blockdevice.read
-	
-	ld de, (GFS_tmp_at) ; load the first sector of the directory
-	
+	pop	bc			; prevent stack corruption
+;
+	; found it!  Get the AT address and	load the AT
+	call	file_obj.get_at
+;
+	ld	hl,(main_disk)
+	call	blockdevice.set_address
+;
+	ld	de,GFS_TMP_AT		; store in the temporary AT memory
+	call	blockdevice.read
+;
+	ld	de,(GFS_tmp_at)		; load the first sector of the directory
+;
 	; now clear this segment of the path
-	ld hl, (.path_ptr)
+	ld	hl,(.path_ptr)
+;
 .skipping_loop:
-	ld a, (hl)
-	or a
-	jp z, .setptr
-	inc hl ; skip any '/' and increment here
-	cp '/'
-	jp z, .setptr
-	jp .skipping_loop
+	ld	a, (hl)
+	or	a
+	jr	z,.setptr
+;
+	inc	hl			; skip any '/' and	increment here
+	cp	'/'
+	jr	nz,.skipping_loop
+;
 .setptr:
-	ld (.path_ptr), hl
-	jp .load_loop
+	ld	(.path_ptr),hl
+	jr	.load_loop
 .done:
-	ld (gfs_nextfile.sector), de
-	pop hl
-	pop bc
+	ld	(gfs_nextfile.sector),de
+	pop	hl
+	pop	bc
 	ret
-	
-.path_ptr: dw 0
-
-comp_path_root: ; sets zero flag if the first path entry of hl and de are the same; ignores the rest.
-	push de
-	push hl
-.strcomp_l: 
-    ld a,(de)
-	or a
-	jp z, .termination
-	cp '/'
-	jp z, .termination
-    cp (hl) 
-    jp nz, .strcret    ;nz means they are not equal 
-    inc hl 
-    inc de
-    jp .strcomp_l
+;
+.path_ptr:	dw	0
+;
+comp_path_root:	; sets zero flag if the first path entry of hl and	de are the same; ignores the rest.
+	push	de
+	push	hl
+;
+.strcomp_l:
+	ld	a,(de)
+	or	a
+	jr	z,.termination
+;
+	cp	'/'
+	jr	z,.termination
+;
+	cp	(hl)
+	jr	nz,.strcret   		;nz means they are not equal
+;
+	inc	hl
+	inc	de
+	jr	.strcomp_l
+;
 .termination:
-	ld a, (hl)
-	or a
-	jp z, .strcret
-	cp '/'
+	ld	a, (hl)
+	or	a
+	jr	z,.strcret
+;
+	cp	'/'
 .strcret:
-	pop hl
-	pop de
+	pop	hl
+	pop	de
 	ret
-	
-get_parent_dir: ; gets parent directory.  give original path in hl and buffer in de, a is the original path's last '/', or zero if none.
-	push bc
-	push de
-	push hl
-	
-	call strlen
-	dec bc		; don't check the final zero
-	add hl, bc
-	ld b, c
+;
+; gets parent directory.  give original path in hl and buffer in de,
+; a is the original path's last '/', or zero if none.
+;
+get_parent_dir:
+	call	pushpair		; pushes all register pairs and setup stack to call poppair on return
+;
+	call	strlen
+;
+	dec	bc			; don't check the final zero
+	add	hl,bc
+	ld	b,c
 .loop:
-	ld a, (hl)
-	or a
-	jp z, .noslash
-	cp '/'
-	jp z, .slash
-	dec hl
-	djnz .loop
+	ld	a, (hl)
+	or	a
+	jr	z,.noslash
+;
+	cp	'/'
+	jr	z,.slash
+;
+	dec	hl
+	djnz	.loop
+;
 .noslash:	; if here then there's no slash.
-	ld a, '/'
-	ld (de), a
-	inc de
-	xor a
-	ld (de), a
-	
-	pop hl
-	pop de
-	pop bc
+	ld	a, '/'
+	ld	(de), a
+	inc	de
+	xor	a
+	ld	(de), a
+;
 	ret
+;
 .slash:
-	ld a, b		; set up string copy
-	ld b, 0
-	ld c, a
-	pop hl
-	push hl
-	push af
+	ld	c, b			; set up string copy
+	ld	b,0
+;
+	pop	hl
+	push	hl
+;
+	push	af
+;
 	ldir
-	xor a
-	ld (de), a
-	pop af
-	pop hl
-	pop de
-	pop bc
+	xor	a
+	ld	(de), a
+;
+	pop	af
+;
 	ret
-	
-get_final_element: ; Gets final element of a path.  Give original path in hl and buffer in de, a is the original path's last '/', or zero if none.
-	push bc
-	push de
-	push hl
-	
-	call strlen
-	dec bc		; don't check the final zero
-	add hl, bc
-	ld b, c
-	ld c, 0
-.loop:
-	ld a, (hl)
-	or a
-	jp z, .noslash
-	cp '/'
-	jp z, .slash
-	dec hl
-	inc c
-	djnz .loop
+;
+; Gets final element of a path.  Give original path in hl and
+;	buffer in de,a is the original path's last '/', or zero if none.
+;
+get_final_element:
+	call	pushpair		; pushes all register pairs and setup stack to call poppair on return
+;
+	call	strlen
+;
+	dec	bc			; don't check the final zero
+	add	hl,bc
+;
+	ld	b,c
+	ld	c, 0
+;
+.loop:	ld	a, (hl)
+	or	a
+	jr	z,.noslash
+;
+	cp	'/'
+	jr	z,.slash
+;
+	dec	hl
+	inc	c
+	djnz	.loop
+;
 .noslash:	; if here then there's no slash.
-	inc c
-	ld a, (hl)
-	cp '/'
-	jp z, .slash
-	dec hl
+	inc	c
+;
+	ld	a, (hl)
+	cp	'/'
+	jr	z,.slash
+;
+	dec	hl
 .slash:
-	inc hl
-	ld b, 0		; set up string copy (c is counted already)
-	push af
+	inc	hl
+	ld	b,0			; set up string copy (c is counted already)
+;
+	push	af
+;
 	ldir
-	xor a
-	ld (de), a
-	pop af
-	pop hl
-	pop de
-	pop bc
+	xor	a
+	ld	(de), a
+;
+	pop	af
+;
 	ret
-	
-	
-	
+;
 gfs_rm:		; file/dir name in hl
-	push bc
-	push de
-	push hl
-	ld de, os_str_buffer
-	call get_parent_dir
-	ex de, hl
-	call ld_dir_table
-	pop hl						; restore hl
-	push hl
-	push de						; save sector id
-	ld de, os_str_buffer
-	call get_final_element		; get filename in os_str_buffer
-
-	ld a, (GFS_ROOT_SECTORS)	; load directory sector count
-	ld b, a
+	call	pushpair		; pushes all register pairs and setup stack to call poppair on return
+;
+	ld	de,os_str_buffer
+	call	get_parent_dir
+	ex	de,hl
+	call	ld_dir_table
+;
+	pop	hl			; restore hl
+	push	hl
+;
+	push	de			; save sector id
+	ld	de,os_str_buffer
+	call	get_final_element	; get filename in os_str_buffer
+;
+	ld	a, (GFS_ROOT_SECTORS)	; load directory sector count
+	ld	b,a
 .search_blockloop:
-	ld de, GFS_root
-	ld hl, (main_disk)
-	call blockdevice.read
-	
-	push bc
-	ld b, 8
-	ld hl, GFS_root
+	ld	de,GFS_root
+	ld	hl,(main_disk)
+	call	blockdevice.read
+;
+	push	bc
+;
+	ld	b,8
+	ld	hl,GFS_root
 .search_entryloop:	; loop through the file entries
-	ld a, b
-	add b
-	add a
-	add a
-	add a
-	add a
-	ld l, a 						; address in sector of file entry in hl (can now use file objects)
-	
-	call file_obj.isDir
-	jr nz, .search_entryloop_e		; if directory then the slot is taken
-	call file_obj.isFile
-	jr nz, .search_entryloop_e		; We just found the slot for our new entry!
-	ld de, os_str_buffer
-	push hl
-	call file_obj.get_name
-	call strcomp
-	pop hl
-	jp z, .found
-	
+	ld	a, b
+	add	a
+	add	a
+	add	a
+	add	a
+	add	a
+	ld	l, a 			; address in sector of file entry in hl (can now use file objects)
+;
+	call	file_obj.isDir
+	jr	nz,.search_entryloop_e	; if directory then the slot is taken
+;
+	call	file_obj.isFile
+	jr	nz,.search_entryloop_e	; We just found the slot for our new entry!
+;
+	ld	de,os_str_buffer
+;
+	push	hl
+;
+	call	file_obj.get_name
+	call	strcomp
+;
+	pop	hl
+;
+	jr	z,.found
+;
 	; if file then the slot is taken, move on
-	
+;
 .search_entryloop_e:
-	djnz .search_entryloop			; count with b
-									; [not found]
-	pop bc							; get back saved counter
-	djnz .search_blockloop			; loop back to block searcher
-									; ... or not.  Throw exception because there is not enough storage.
-	call throw
+	djnz	.search_entryloop	; count with b
+					; [not found]
+	pop	bc			; get back saved counter
+;
+	djnz	.search_blockloop	; loop back to block searcher
+					; ... or	not.  Throw exception because there is not enough storage.
+	call	throw
 .found:
-	pop bc							; first calculate the sector that the entry came from and push it
-	pop de
-	ex de, hl
-	ld a, 8
-	sub b
-	ld c, a
-	ld b, 0
-	add hl, bc
-	ex de, hl
-	push de
-
-	xor a							; remove file properties
-	ld (hl), a
-	inc hl
-	ld (hl), a
-	
-	pop de							; write the previous root
-	call blockdevice.set_address
-	ld de, GFS_root
-	call blockdevice.write
-	
+	pop	bc			; first calculate the sector that the entry came from and	push	it
+	pop	de
+	ex	de,hl
+	ld	a, 8
+	sub	b
+	ld	c, a
+	ld	b,0
+	add	hl,bc
+	ex	de,hl
+	push	de
+;
+	xor	a			; remove file properties
+	ld	(hl), a
+	inc	hl
+	ld	(hl), a
+;
+	pop	de			; write the previous root
+	call	blockdevice.set_address
+	ld	de,GFS_root
+	call	blockdevice.write
+;
 	; All done!
-	pop hl
-	pop de
-	pop bc
 	ret
-	
+;
 gfs_mkdir:		; directory name in hl
-	push bc
-	push de
-	push hl
-	ld de, os_str_buffer
-	call get_parent_dir
-	ex de, hl
-	call ld_dir_table
-	push de						; save sector id
-
-	ld a, (GFS_ROOT_SECTORS)	; load directory sector count
-	ld b, a
+	call	pushpair		; pushes all register pairs and setup stack to call poppair on return
+;
+	ld	de,os_str_buffer
+	call	get_parent_dir
+	ex	de,hl
+	call	ld_dir_table
+	push	de			; save sector id
+;
+	ld	a, (GFS_ROOT_SECTORS)	; load directory sector count
+	ld	b,a
 .search_blockloop:
-	ld de, GFS_root
-	ld hl, (main_disk)
-	call blockdevice.read
-	
-	push bc
-	ld b, 8
-	ld hl, GFS_root
-.search_entryloop:	; loop through the file entries
-	ld a, b
-	add b
-	add a
-	add a
-	add a
-	add a
-	ld l, a 						; address in sector of file entry in hl (can now use file objects)
-	
-	call file_obj.isDir
-	jr nz, .search_entryloop_e		; if directory then the slot is taken
-	call file_obj.isFile
-	jr z, .found					; We just found the slot for our new entry!
-	
+	ld	de,GFS_root
+	ld	hl,(main_disk)
+	call	blockdevice.read
+;
+	push	bc
+;
+	ld	b,8
+	ld	hl,GFS_root
+.search_entryloop:			; loop through the file entries
+	ld	a, b
+	add	a
+	add	a
+	add	a
+	add	a
+	add	a
+	ld	l, a 			; address in sector of file entry in hl (can now use file objects)
+;
+	call	file_obj.isDir
+	jr	nz,.search_entryloop_e	; if directory then the slot is taken
+;
+	call	file_obj.isFile
+	jr	z,.found		; We just found the slot for our new entry!
+;
 	; if file then the slot is taken, move on
-	
+;
 .search_entryloop_e:
-	
-	djnz .search_entryloop			; count with b
-									; [not found]
-	pop bc							; get back saved counter
-	djnz .search_blockloop			; loop back to block searcher
-									; ... or not.  Throw exception because there is not enough storage.
-	call throw
+;
+	djnz	.search_entryloop	; count with b
+					; [not found]
+	pop	bc			; get back saved counter
+	djnz	.search_blockloop	; loop back to block searcher
+					; ... or not.  Throw exception because there is not enough storage.
+	call	throw
 .found:
-	pop bc							; first calculate the sector that the entry came from and push it
-	pop de
-	ex de, hl
-	ld a, 8
-	sub b
-	ld c, a
-	ld b, 0
-	add hl, bc
-	ex de, hl
-	push de
-	
-
-	ld a, file_obj._dir_flag		; set only the directory flag in the properties
-	ld (hl), a
-	xor a
-	inc hl
-	ld (hl), a
-	
-	inc hl							; now set the allocation table address
-	inc hl
-	inc hl
-	call gfs_allocate_new_sector	; allocate a sector for the AT
-	
-	ld (hl), e						; save it's address
-	inc hl
-	ld (hl), d
-	inc hl
-	ld (.at_adr), de
-	
-	ld de, 2048						; size of a directory (8 sectors*256 bytes a sector)
-	ld (hl), e						; save it's size
-	inc hl
-	ld (hl), d
-	
-	ld bc, 9
-	add hl, bc
-	pop de
-	ld (.to_zero), de 				; just use the temporary RAM
-	pop de
-	push de
-	ex de, hl
-	call get_final_element
-	ld de, (.to_zero)
-	push de
-	
-	call gfs_allocate_8_sectors		; allocate 8 sectors for the directory
-	ld (.to_zero), de
-	
-	ld hl, GFS_tmp_at				; get ready to set at addresses
-	ld b, 8
+	pop	bc			; first calculate the sector that the entry came from and	push	it
+	pop	de
+;
+	ex	de,hl
+	ld	a, 8
+	sub	b
+	ld	c, a
+	ld	b,0
+	add	hl,bc
+	ex	de,hl
+;
+	push	de
+;
+	ld	a, file_obj._dir_flag	; set only the directory flag in the properties
+	ld	(hl), a
+	xor	a
+	inc	hl
+	ld	(hl), a
+;
+	inc	hl			; now set the allocation table address
+	inc	hl
+	inc	hl
+	call	gfs_allocate_new_sector	; allocate a sector for the AT
+;
+	ld	(hl), e			; save it's address
+	inc	hl
+	ld	(hl), d
+	inc	hl
+	ld	(.at_adr),de
+;
+	ld	de,2048			; size of a directory (8 sectors*256 bytes a sector)
+	ld	(hl), e			; save it's size
+	inc	hl
+	ld	(hl), d
+;
+	ld	bc, 9
+	add	hl,bc
+	pop	de
+	ld	(.to_zero),de 		; just use the temporary RAM
+	pop	de
+	push	de
+	ex	de,hl
+	call	get_final_element
+	ld	de,(.to_zero)
+	push	de
+;
+	call	gfs_allocate_8_sectors	; allocate 8 sectors for the directory
+	ld	(.to_zero),de
+;
+	ld	hl,GFS_tmp_at		; get ready to set at addresses
+	ld	b,8
 .at_loop:
-	ld (hl), e
-	inc hl
-	ld (hl), d
-	inc hl
-	inc de
-	djnz .at_loop
-	
-	xor a							; set final AT to zero to mark it as finished
-	ld (hl), a
-	inc hl
-	ld (hl), a
-	
-	ld hl, (main_disk)				; write the AT
-	ld de, (.at_adr)
-	call blockdevice.set_address	; set current address to the AT address
-	ld de, GFS_tmp_at
-	call blockdevice.write
-	
-	pop de							; write the previous root
-	call blockdevice.set_address
-	ld de, GFS_root
-	call blockdevice.write
-	
-	ld de, (.to_zero)				; set address for zeroing
-	call blockdevice.set_address
-	
-	ld de, GFS_root
-	xor a
-	ld b, a							; write 1 sector (256 bytes)
-	
-.zero_loop:							; zero the root
-	ld (de), a
-	inc de
-	djnz .zero_loop
-	
-	ld b, 8							; write next 8 sectors
-	ld de, GFS_root
+	ld	(hl), e
+	inc	hl
+	ld	(hl), d
+;
+	inc	hl
+	inc	de
+;
+	djnz	.at_loop
+;
+	xor	a			; set final AT to zero to mark it as finished
+	ld	(hl), a
+	inc	hl
+	ld	(hl), a
+;
+	ld	hl,(main_disk)		; write the AT
+	ld	de,(.at_adr)
+	call	blockdevice.set_address	; set current address to the AT address
+;
+	ld	de,GFS_tmp_at
+	call	blockdevice.write
+;
+	pop	de			; write the previous root
+	call	blockdevice.set_address
+;
+	ld	de,GFS_root
+	call	blockdevice.write
+;
+	ld	de,(.to_zero)		; set address for zeroing
+	call	blockdevice.set_address
+;
+	ld	de,GFS_root
+	xor	a
+	ld	b,a			; write 1 sector (256 bytes)
+;
+.zero_loop:				; zero the root
+	ld	(de), a
+	inc	de
+	djnz	.zero_loop
+;
+	ld	b,8			; write next 8 sectors
+	ld	de,GFS_root
 .wrdir_loop:
-	call blockdevice.write
-	djnz .wrdir_loop
-	
+	call	blockdevice.write
+	djnz	.wrdir_loop
+;
 	; All done!
-	pop hl
-	pop de
-	pop bc
 	ret
-	
-.to_zero: dw 0
-.at_adr: dw 0
-
-gfs_mkfile:		; file name in hl, will create an empty file
-	push bc
-	push de
-	push hl
-	ld de, os_str_buffer
-	call get_parent_dir
-	ex de, hl
-	call ld_dir_table
-	push de						; save sector id
-
-	ld a, (GFS_ROOT_SECTORS)	; load directory sector count
-	ld b, a
+;
+.to_zero:	dw	0
+.at_adr:	dw	0
+;
+gfs_mkfile:		; file name in hl,will create an empty file
+	call	pushpair		; pushes all register pairs and setup stack to call poppair on return
+;
+	ld	de,os_str_buffer
+	call	get_parent_dir
+;
+	ex	de,hl
+	call	ld_dir_table
+;
+	push	de			; save sector id
+;
+	ld	a, (GFS_ROOT_SECTORS)	; load directory sector count
+	ld	b,a
 .search_blockloop:
-	ld de, GFS_root
-	ld hl, (main_disk)
-	call blockdevice.read
-	
-	push bc
-	ld b, 8
-	ld hl, GFS_root
+	ld	de,GFS_root
+	ld	hl,(main_disk)
+	call	blockdevice.read
+;
+	push	bc
+;
+	ld	b,8
+	ld	hl,GFS_root
 .search_entryloop:	; loop through the file entries
-	ld a, b
-	add b
-	add a
-	add a
-	add a
-	add a
-	ld l, a 						; address in sector of file entry in hl (can now use file objects)
-	
-	call file_obj.isDir
-	jr nz, .search_entryloop_e		; if directory then the slot is taken
-	call file_obj.isFile
-	jr z, .found					; We just found the slot for our new entry!
-	
+	ld	a, b
+	add	a
+	add	a
+	add	a
+	add	a
+	add	a
+	ld	l, a 			; address in sector of file entry in hl (can now use file objects)
+;
+	call	file_obj.isDir
+	jr	nz,.search_entryloop_e	; if directory then the slot is taken
+;
+	call	file_obj.isFile
+	jr	z,.found		; We just found the slot for our new entry!
+;
 	; if file then the slot is taken, move on
-	
+;
 .search_entryloop_e:
-	djnz .search_entryloop			; count with b
-									; [not found]
-	pop bc							; get back saved counter
-	djnz .search_blockloop			; loop back to block searcher
-									; ... or not.  Throw exception because there is not enough storage.
-	call throw
+	djnz	.search_entryloop	; count with b
+					; [not found]
+	pop	bc			; get back saved counter
+	djnz	.search_blockloop	; loop back to block searcher
+					; ... or not.  Throw exception because there is not enough storage.
+	call	throw
 .found:
-	pop bc							; first calculate the sector that the entry came from and push it
-	pop de
-	ex de, hl
-	ld a, 8
-	sub b
-	ld c, a
-	ld b, 0
-	add hl, bc
-	ex de, hl
-	push de
-	
-
-	ld a, file_obj._file_flag		; set only the file flag in the properties
-	ld (hl), a
-	xor a
-	inc hl
-	ld (hl), a
-	
-	inc hl							; now set the allocation table address
-	inc hl
-	inc hl
-	call gfs_allocate_new_sector	; allocate a sector for the AT
-	
-	ld (hl), e						; save it's address
-	inc hl
-	ld (hl), d
-	inc hl
-	ld (.at_adr), de
-	
-	ld de, 0						; size of an empty file
-	ld (hl), e						; save it's size
-	inc hl
-	ld (hl), d
-	
-	ld bc, 9						; add 9 to get file name offset
-	add hl, bc
-	pop de
-	ld (.to_zero), de 				; just use the temporary RAM
-	pop de
-	push de
-	ex de, hl
-	call get_final_element			; load name into file object
-	ld de, (.to_zero)
-	push de
-	
-	ld hl, GFS_tmp_at				; get ready to make the AT empty
-	
-	xor a							; set first AT to zero to mark it as finished
-	ld (hl), a
-	inc hl
-	ld (hl), a
-	
-	ld hl, (main_disk)				; write the AT
-	ld de, (.at_adr)
-	call blockdevice.set_address	; set current address to the AT address
-	
-	ld de, GFS_tmp_at
-	call blockdevice.write
-	
-	pop de							; write the previous root
-	call blockdevice.set_address
-	ld de, GFS_root
-	call blockdevice.write
-	
+	pop	bc			; first calculate the sector that the entry came from and	push	it
+	pop	de
+	ex	de,hl
+	ld	a, 8
+	sub	b
+	ld	c, a
+	ld	b,0
+	add	hl,bc
+	ex	de,hl
+;
+	push	de
+;
+	ld	a, file_obj._file_flag	; set only the file flag in the properties
+	ld	(hl), a
+;
+	xor	a
+	inc	hl
+	ld	(hl), a
+;
+	inc	hl			; now set the allocation table address
+	inc	hl
+	inc	hl
+	call	gfs_allocate_new_sector	; allocate a sector for the AT
+;
+	ld	(hl), e			; save it's address
+	inc	hl
+	ld	(hl), d
+	inc	hl
+	ld	(.at_adr),de
+;
+	ld	de,0			; size of an empty file
+	ld	(hl), e			; save it's size
+	inc	hl
+	ld	(hl), d
+;
+	ld	bc, 9			; add	9 to get file name offset
+	add	hl,bc
+;
+	pop	de
+	ld	(.to_zero),de 		; just use the temporary RAM
+;
+	pop	de
+	push	de
+;
+	ex	de,hl
+	call	get_final_element	; load name into file object
+;
+	ld	de,(.to_zero)
+	push	de
+;
+	ld	hl,GFS_tmp_at		; get ready to make the AT empty
+;
+	xor	a			; set first AT to zero to mark it as finished
+	ld	(hl), a
+	inc	hl
+	ld	(hl), a
+;
+	ld	hl,(main_disk)		; write the AT
+	ld	de,(.at_adr)
+	call	blockdevice.set_address	; set current address to the AT address
+;
+	ld	de,GFS_tmp_at
+	call	blockdevice.write
+;
+	pop	de			; write the previous root
+	call	blockdevice.set_address
+	ld	de,GFS_root
+	call	blockdevice.write
+;
 	; All done!
-	pop hl
-	pop de
-	pop bc
 	ret
-	
-.to_zero: dw 0
-.at_adr: dw 0
-
-
-
+;
+.to_zero:	dw	0
+.at_adr:	dw	0
+;
 gfs_nextfile:				; returns next file object in hl
-	push de
-	push bc
-	
-	ld hl, (main_disk)
-	ld de, (.sector)
-	call blockdevice.set_address
-	ld de, GFS_root
-	call blockdevice.read
-	
-	ld a, (.index)			; multiply index by 32
-	and 7
-	add a
-	add a
-	add a
-	add a
-	add a
-	
-	ld b, 0
-	ld c, a
-	ld hl, GFS_root			; the object address is calculated
-	add hl, bc
-	
-	ld a, (.index)
-	inc a
-	cp 64
-	jp z, .loopback
-	ld c, a
-	and 7
-	ld a, c
-	jp nz, .not_new_sector	; increment counter.  If our location in the sector goes out of bounds then go to the next sector.
-
-	ex de, hl
-	ld hl, (.sector)
-	inc hl
-	ld (.sector), hl
-	ex de, hl
-	
-.not_new_sector:	
-	ld (.index), a
-	
-	pop bc
-	pop de
+	push	de
+	push	bc
+;
+	ld	hl,(main_disk)
+	ld	de,(.sector)
+	call	blockdevice.set_address
+	ld	de,GFS_root
+	call	blockdevice.read
+;
+	ld	a, (.index)		; multiply index by 32
+	and	7
+	add	a
+	add	a
+	add	a
+	add	a
+	add	a
+;
+	ld	b,0
+	ld	c, a
+	ld	hl,GFS_root		; the object address is calculated
+	add	hl,bc
+;
+	ld	a, (.index)
+	inc	a
+	cp	64
+	jr	z,.loopback
+	ld	c, a
+	and	7
+	ld	a, c
+	jr	nz,.not_new_sector	; increment counter.  If our location in the sector goes out of bounds then go to the next sector.
+;
+	ex	de,hl
+	ld	hl,(.sector)
+	inc	hl
+	ld	(.sector),hl
+	ex	de,hl
+;
+.not_new_sector:
+	ld	(.index), a
+;
+	pop	bc
+	pop	de
 	ret
+;
 .loopback:
-	xor a					; carry flag is reset here
-	ex de, hl
-	ld hl, (.sector)
-	ld bc, 7
-	sbc hl, bc				; subtract 7 to get back the first sector (sector 0)
-	ld (.sector), hl
-	ex de, hl
-	jp .not_new_sector
-	
-	
-.index: db 0
-.sector: dw 0
-
-gfs_lsfiles_str:	; hl is directory, de is buffer to store string (may take up a decent amount of RAM - be careful.) 
-	push bc
-	push de
-	push hl
-	push de						; save destination on the stack
-	call ld_dir_table
-
-	ld a, (GFS_ROOT_SECTORS)	; load directory sector count
-	ld b, a
-	pop hl						; get the destination off of the stack
+	xor	a			; carry flag is reset here
+	ex	de,hl
+	ld	hl,(.sector)
+	ld	bc, 7
+	sbc	hl,bc			; subtract 7 to get back the first sector (sector 0)
+	ld	(.sector),hl
+	ex	de,hl
+	jr	.not_new_sector
+;
+.index:	db	0
+.sector:dw	0
+;
+gfs_lsfiles_str:	; hl is directory,de is buffer to store string (may take up a decent amount of RAM - be careful.)
+	call	pushpair		; pushes all register pairs and setup stack to call poppair on return
+;
+	push	de			; save destination on the stack
+	call	ld_dir_table
+;
+	ld	a, (GFS_ROOT_SECTORS)	; load directory sector count
+	ld	b,a
+;
+	pop	hl			; get the destination off of the stack
+;
 .search_blockloop:
-	push hl
-	
-	ld de, GFS_root
-	ld hl, (main_disk)
-	call blockdevice.read
-	
-	pop hl
-	
-	push bc
-	ld b, 8
-	ld ix, GFS_root
-	ld de, 16
-.search_entryloop:	; loop through the file entries
-	ld a, (ix)
-	and 3
-	jp z, .next
-	push af
-	add ix, de		; add 16 to get the filename string
-	call .copy
-	
-	pop af			; file or directory?
-	and 1
-	jp nz, .file
-	
-	ld a, '/'
-	ld (hl), a
-	inc hl
-.file:
-
-	ld a, ' '
-	ld (hl), a
-	inc hl
-	
-	add ix, de		; add 16 to get the next file object
-	
-	
+	push	hl
+;
+	ld	de,GFS_root
+	ld	hl,(main_disk)
+	call	blockdevice.read
+;
+	pop	hl
+;
+	push	bc
+;
+	ld	b,8
+	ld	ix, GFS_root
+	ld	de,16
+.search_entryloop:			; loop through the file entries
+	ld	a, (ix)
+	and	3
+	jr	z,.next
+;
+	push	af
+	add	ix,de			; add 16 to get the filename string
+	call	.copy
+;
+	pop	af			; file or	directory?
+	and	1
+	jr	nz,.file
+;
+	ld	a, '/'
+	ld	(hl), a
+	inc	hl
+;
+.file:	ld	a, ' '
+	ld	(hl), a
+	inc	hl
+;
+	add	ix,de			; add 16 to get the next file object
+;
 .search_entryloop_e:
-	djnz .search_entryloop			; count with b
-									; [not found]
-	pop bc							; get back saved counter
-	djnz .search_blockloop			; loop back to block searcher
-	
-									; all done!
-	dec hl							; zero out the last byte, where there was a space put
-	xor a
-	ld (hl), a
-	
-	pop hl
-	pop de
-	pop bc
+	djnz	.search_entryloop	; count with b
+					; [not found]
+	pop	bc			; get back saved counter
+	djnz	.search_blockloop	; loop back to block searcher
+;
+					; all done!
+	dec	hl			; zero out the last byte, where there was a space put
+	xor	a
+	ld	(hl), a
+;
 	ret
-.copy:								; copy subfunction, copies up to 16 bytes from ix to hl (saving ix only)
-	push ix
-	push bc
-	ld b, 16
+;
+.copy:					; copy subfunction, copies up to 16 bytes from ix to hl (saving ix only)
+	push	ix
+	push	bc
+	ld	b,16
 .clop:
-	ld a, (ix)
-	or a
-	jr z, .cdone
-	ld (hl), a
-	inc hl
-	inc ix
-	djnz .clop
+	ld	a, (ix)
+	or	a
+	jr	z,.cdone
+;
+	ld	(hl), a
+	inc	hl
+	inc	ix
+	djnz	.clop
+;
 .cdone:
-	pop bc
-	pop ix
+	pop	bc
+	pop	ix
 	ret
-	
-.next:
-	add ix, de
-	add ix, de		; add 32 to get the next file object
-	jp .search_entryloop_e
-	
-	
+;
+.next:	add	ix,de
+	add	ix,de			; add	32 to get the next file object
+	jr	.search_entryloop_e
+;
 gfs_allocate_new_sector:		; returns new sector id in de
-	push hl
-	ld de, (GFS_NEXT_FREE_SECTOR)
-	push de	; save sector id
-	inc de
-	ld (GFS_NEXT_FREE_SECTOR), de	; increment used sectors/next free sector
-	
+	push	hl
+;
+	ld	de,(GFS_NEXT_FREE_SECTOR)
+;
+	push	de	; save sector id
+;
+	inc	de
+	ld	(GFS_NEXT_FREE_SECTOR),de	; increment used sectors/next free sector
+;
 	; check for maximum used sectors
-	ld hl, (GFS_NSECTORS)
-	scf	; set carry for more-than-or-equal-to operation
-	sbc hl, de
-	
-	jr c, .error	; OOPS! Ran out of storage.
-	
-	ld hl, (main_disk)
-	ld de, GFS_head_sector
-	call blockdevice.set_address
-	ld de, GFS_head
-	call blockdevice.write
-	pop de
-	pop hl
-	
+	ld	hl,(GFS_NSECTORS)
+	scf				; set carry for more-than-or-equal-to operation
+	sbc	hl,de
+;
+	jr	c,.error		; OOPS! Ran out of storage.
+;
+	ld	hl,(main_disk)
+	ld	de,GFS_head_sector
+	call	blockdevice.set_address
+;
+	ld	de,GFS_head
+	call	blockdevice.write
+;
+	pop	de
+	pop	hl
+;
 	ret
-db 0,"gfs_allocate_new_sector", 0
-.error:
-	call throw
-	
-gfs_allocate_8_sectors:		; returns first sector id in de
-	push hl
-	ld de, (GFS_NEXT_FREE_SECTOR)
-	push de	; save first sector id
-	inc de
-	inc de
-	inc de
-	inc de
-	inc de
-	inc de
-	inc de
-	inc de
-	ld (GFS_NEXT_FREE_SECTOR), de	; increment used sectors/next free sector
-	
+;
+	db	0,"gfs_allocate_new_sector", 0
+
+.error:	call	throw
+;
+gfs_allocate_8_sectors:			; returns first sector id in de
+	push	hl
+;
+	ld	hl,(GFS_NEXT_FREE_SECTOR)
+	push	hl			; save first sector id
+;
+	add	hl,hl	;+*1 ==> *2
+	add	hl,hl	;+*2 ==> *4
+	add	hl,hl	;+*4 ==> *8
+;
+	ld	(GFS_NEXT_FREE_SECTOR),hl	; increment used sectors/next free sector
+	ex	de,hl	;move it to de
+;
 	; check for maximum used sectors
-	ld hl, (GFS_NSECTORS)
+	ld	hl,(GFS_NSECTORS)
 	scf	; set carry
-	sbc hl, de
-	
-	jr c, .error	; OOPS! Ran out of storage.
-	
-	ld hl, (main_disk)
-	ld de, GFS_head_sector
-	call blockdevice.set_address
-	ld de, GFS_head
-	call blockdevice.write
-	pop de
-	pop hl
-	
+	sbc	hl,de
+;
+	jr	c,.error		; OOPS! Ran out of storage.
+;
+	ld	hl,(main_disk)
+	ld	de,GFS_head_sector
+	call	blockdevice.set_address
+;
+	ld	de,GFS_head
+	call	blockdevice.write
+;
+	pop	de
+	pop	hl
 	ret
-db 0,"gfs_allocate_8_sectors", 0
+;
+	db	0,"gfs_allocate_8_sectors", 0
 .error:
-	call throw
-root_str: db "/", 0
+	call	throw
+root_str:	db	"/", 0
+;
+;##############################################################################
+;pushall - pushes all registers and setups stack to call popall on callers return
+;==============================================================================
+;
+pushall:
+	ex	(sp),hl		;swap return address with hl
+	push	de		;save all the other register pairs
+	push	bc
+	push	af
+;
+	push	hl		;save the return address
+;
+	ld	hl,popall	;get popall routine address
+	ex	(sp),hl		;swap return address & popall routine address
+;
+	push	hl		;save the return address (again)
+;
+	push	af		;save af (again)
+;
+	ld	hl,12		;offset to hl on stack
+	add	hl,sp		;add	the stack pointer
+;
+	ld	a,(hl)		;get l off stack
+	inc	hl		;bump pointer
+	ld	h,(hl)		;get h off stack
+	ld	l,a		;move l from stack to l register
+;
+	pop	af		;restore AF
+	ret
+;
+;##############################################################################
+;pushpair - pushes all register pairs and setup stack to call poppair on callers return
+;==============================================================================
+;
+pushpair:
+	ex	(sp),hl		;swap return address with hl
+	push	de		;save all the other register pairs
+	push	bc
+;
+	push	hl		;save the return address
+;
+	ld	hl,poppair	;get poppair routine address
+	ex	(sp),hl		;swap return address & poppair routine address
+;
+	push	hl		;save the return address (again)
+;
+	push	af		;save af (again)
+;
+	ld	hl,10		;get offset to hl on stack
+	add	hl,sp		;add	the stack pointer
+;
+	ld	a,(hl)		;get l off stack
+	inc	hl		;bump pointer
+	ld	h,(hl)		;get h off stack
+	ld	l,a		;move l from stack to l register
+;
+	pop	af		;restore AF
+	ret
+;##############################################################################
+;popall[/poppair] - restores all register(s) [pairs]
+;==============================================================================
+popall: pop	af		;restore all registers
+poppair:pop	bc		;restore all register pairs
+	pop	de
+	pop	hl
+	ret
+;##############################################################################

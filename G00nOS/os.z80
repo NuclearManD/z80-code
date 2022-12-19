@@ -1,53 +1,55 @@
-include "header.z80"
+include	"header.z80"
 
-org boot
+	org	boot
 
 ; I'm couting bytes because the bootloader must be exactly 256 bytes (including final magic)
 _bootloader:
-	ld a, (bd_list_cnt)					; 3 bytes
-	or a								; 1 byte
-	jp z, .no_disk						; 3 bytes
-	
+	ld	a,(bd_list_cnt)					; 3 bytes
+	or	a						; 1 byte
+	jp	z,.no_disk					; 3 bytes
+
 	; load 1792 bytes from disk (first 2k of disk, 7 sectors + boot sector)
-	ld hl, (main_disk)					; 3 bytes
+	ld	hl,(main_disk)					; 3 bytes
+
 	; start copy at sector 1
-	ld de, 1							; 3 bytes
-	call blockdevice.set_address		; 3 bytes
-	ld de, boot+256						; 3 bytes
-	ld b, 15							; 2 bytes
+	ld	de,1						; 3 bytes
+	call	blockdevice.set_address				; 3 bytes
+	ld	de,boot+256					; 3 bytes
+	ld	b,15						; 2 bytes
 .load_loop:
-	call blockdevice.read				; 3 bytes
+	call	blockdevice.read				; 3 bytes
 	; next 256 bytes to load
-	ld a, d								; 1 byte
-	inc a								; 1 byte
-	ld d, a								; 1 byte
-	djnz .load_loop						; 2 bytes  (29 thus far)
-	
+	ld	a,d						; 1 byte
+	inc	a						; 1 byte
+	ld	d, a						; 1 byte
+	djnz	.load_loop					; 2 bytes  (29 thus far)
+
 	; loaded OS!  Now check the magic number.
-	ld hl, (magic_check)				; 3 bytes
-	ld bc, TEST_MAGIC					; 3 bytes
-	and a								; 1 byte
-	sbc hl, bc							; 2 bytes
-	jr nz, .bad_install					; 2 bytes
-	
+	ld	hl,(magic_check)				; 3 bytes
+	ld	bc,TEST_MAGIC					; 3 bytes
+	and	a						; 1 byte
+	sbc	hl,bc						; 2 bytes
+	jr	nz,.bad_install					; 2 bytes
+
 	; magic is valid, start execution!
-	jp _entry							; 3 bytes
+	jp	_entry						; 3 bytes
 .no_disk:
-	ld hl, .no_disk_msg					; 3 bytes
-	call println						; 3 bytes
-	
+	ld	hl,.no_disk_msg					; 3 bytes
+	call	println						; 3 bytes
+
 	; return tells BIOS to enter flash mode.
-	ret									; 1 byte
+	ret							; 1 byte
+
 .bad_install:
-	ld hl, .bad_install_msg				; 3 bytes
-	call println						; 3 bytes
-	
+	ld	hl,.bad_install_msg				; 3 bytes
+	call	println						; 3 bytes
+
 	; return tells BIOS to enter flash mode.
-	ret									; 1 byte
-	
+	ret							; 1 byte
+
 ; above code is 57 bytes
-.no_disk_msg: db		"No disk! Cannot load!", 0 ; 22 bytes
-.bad_install_msg: db	"Bad install, reflash!", 0 ; 22 bytes
+.no_disk_msg:		db	"No disk! Cannot load!", 0	; 22 bytes
+.bad_install_msg:	db	"Bad install, reflash!", 0	; 22 bytes
 
 ; total here is 101 bytes
 os_str_buffer:		; use this otherwise wasted space as a string buffer
@@ -62,17 +64,17 @@ dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ; a
 db 0, 0, 0, "ye" ; bang, all of the boot sector
 
 _jump_table:	; User programs use this and the BIOS jump table to control the computer.
-	jp _entry			; $9100
-	jp input			; $9103
-	jp gfx_fill			; $9106
-	jp gfx_newline		; $9109
-	jp gfx_indent		; $910C
-	
-	jp gfs_format		; $910F
-	jp ld_dir_table		; $9112
-	jp gfs_mkdir		; $9115
-	
-	jp system			; $9118
+	jp	_entry			; $9100
+	jp	input			; $9103
+	jp	gfx_fill		; $9106
+	jp	gfx_newline		; $9109
+	jp	gfx_indent		; $910C
+
+	jp	gfs_format		; $910F
+	jp	ld_dir_table		; $9112
+	jp	gfs_mkdir		; $9115
+
+	jp	system			; $9118
 
 ; ==================================================================
 ;
@@ -81,90 +83,107 @@ _jump_table:	; User programs use this and the BIOS jump table to control the com
 ; ==================================================================
 
 _entry:
-	ld hl, 0
-	add hl, sp
-	ld (os_quit.origin_sp), hl	; save sp
-	
-	ld hl, .error
-	call try
-	ld hl, .setup_gfx
-	call println
-	call upd7220_setup
-	call gfx_clear		; fill screen with black and reset cursor position
-	
-	call set_pipes
-	
-	ld hl, .ldfs
-	call println
-	
-	ld hl, (main_disk)
-	call gfs_check_fs
-	jr nz, .bad_fs
-	
-.ready:
-	ld hl, .rdy_msg
-	call println
+	ld	hl,0
+	add	hl,sp
+	ld	(os_quit.origin_sp),hl	; save sp
 
-	ld hl, 64	; allocate memory for the input
-	call alloc
+	ld	hl,.error
+	call	try
+	ld	hl,.setup_gfx
+	call	println
+	call	upd7220_setup
+	call	gfx_clear		; fill screen with black and reset cursor position
+
+	call	set_pipes
+
+	ld	hl,.ldfs
+	call	println
+
+	ld	hl,(main_disk)
+	call	gfs_check_fs
+	jr	nz,.bad_fs
+
+.ready:
+	ld	hl,.rdy_msg
+	call	println
+
+	ld	hl,64			; allocate memory for the input
+	call	alloc
 .terminal_loop:
-	ld a, '>'
-	call chrout
-	
-	push hl	; save input RAM
-	ld hl, .terminal_error	; don't crash OS if there is an error
-	call try
-	pop hl ; resore input RAM
-	
-	call input	; get user input
-	call system	; process with system
-	
-	call notry	; catch errors normally again
-	
-	;jp os_quit					; enter flash program
-	jp .terminal_loop
+	ld	a,'>'
+	call	chrout
+
+	push	hl			; save input RAM
+
+	ld	hl,.terminal_error	; don't crash OS if there is an error
+	call	try
+
+	pop	hl 			; resore input RAM
+
+	call	input			; get user input
+	call	system			; process with system
+
+	call	notry			; catch errors normally again
+
+	;jp	os_quit			; enter flash program
+	jp	.terminal_loop
+
 .terminal_error:
-	ld hl, .term_err_msg
-	call println
-	call traceback
-	jp .terminal_loop
-.bad_fs:
-	ld hl, .msg_bad_fs
-	call print
-	
-	call chrin
-	push af
-	call chrout
-	call gfx_newline
-	pop af
-	cp 'Y'
-	jp nz, os_quit
-	
-	ld hl, .msg_enter_fs_size	; get size input from user
-	call print
-	ld hl, 64
-	call alloc
-	call input
-	call hex_to_int
-	ld b, h
-	ld c, l
-	ld hl, (main_disk)
-	call gfs_format
-	
-	ld hl, .msg_formatted
-	call println
-	
-	jp .ready
-.error:
-	call traceback
-	jp os_quit
-.setup_gfx: db "Setting up graphics...", 0
-.ldfs:	db "Checking filesystem...", 0
-.rdy_msg:	db "Welcome to G00nOS!", 0
-.msg_bad_fs: db "Filesystem is invalid.",$0D,"Format? [Y/n]", 0
-.msg_formatted: db "Formatted.", 0
-.msg_enter_fs_size: db "FS sectors in hex >", 0
-.term_err_msg: db "Error executing command!",$D, 0
+	ld	hl,.term_err_msg
+	call	println
+
+	call	traceback
+
+	jp	.terminal_loop
+
+.bad_fs:ld	hl,.msg_bad_fs
+	call	print
+
+	call	chrin
+
+	push	af
+
+	call	chrout
+
+	call	gfx_newline
+
+	pop	af
+
+	cp	'Y'
+	jp	nz,os_quit
+
+	ld	hl,.msg_enter_fs_size	; get size input from user
+	call	print
+
+	ld	hl,64
+	call	alloc
+
+	call	input
+
+	call	hex_to_int
+
+	ld	b,h
+	ld	c,l
+
+	ld	hl,(main_disk)
+
+	call	gfs_format
+
+	ld	hl,.msg_formatted
+	call	println
+
+	jp	.ready
+
+.error:	call	traceback
+	jp	os_quit
+
+.setup_gfx:		db "Setting up graphics...", 0
+.ldfs:			db "Checking filesystem...", 0
+.rdy_msg:		db "Welcome to G00nOS!", 0
+.msg_bad_fs: 		db "Filesystem is invalid.",$0D,"Format? [Y/n]", 0
+.msg_formatted:		db "Formatted.", 0
+.msg_enter_fs_size:	db "FS sectors in hex >", 0
+.term_err_msg:		db "Error executing command!",$D, 0
 
 ; ==================================================================
 ;
@@ -173,17 +192,18 @@ _entry:
 ; ==================================================================
 
 os_quit:
-	ld hl, .msg_os_quit
-	call println
-	
-	ld hl, (pipe_list)		; fix flash program (don't hack the BIOS...)
-	ld (term_outpipe), hl
-	ld (term_inpipe), hl
-	
-	ld hl, (.origin_sp)
-	ld sp, hl
-	
+	ld	hl,.msg_os_quit
+	call	println
+
+	ld	hl,(pipe_list)		; fix flash program (don't hack the BIOS...)
+	ld	(term_outpipe),hl
+	ld	(term_inpipe),hl
+
+	ld	hl,(.origin_sp)
+	ld	sp,hl
+
 	ret
+
 .msg_os_quit: db "OS Exiting...", 0
 .origin_sp: dw 0
 
@@ -193,10 +213,11 @@ include "G00nFS.z80"
 include "misc.z80"
 
 set_pipes:
-	ld hl, gfx_pipe_obj ; gfx_pipe_obj can also be the keyboard
-	ld (term_outpipe), hl
-	ld (term_inpipe), hl
+	ld	hl,gfx_pipe_obj		; gfx_pipe_obj can also be the keyboard
+	ld	(term_outpipe),hl
+	ld	(term_inpipe),hl
 	ret
-TEST_MAGIC: equ $C7D4
-magic_check: dw TEST_MAGIC
-os_end: equ $A000
+
+TEST_MAGIC:	equ	$C7D4
+magic_check:	dw	TEST_MAGIC
+os_end:		equ	$A000

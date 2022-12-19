@@ -6,26 +6,25 @@ input_old:			equ $000C
 strcomp:			equ $000F
 chrin:				equ $0012
 chrout:				equ $0015
-print_memory:		equ $0018
-	
+print_memory:			equ $0018
+
 try:				equ $001B
 notry:				equ $001E
 throw:				equ $0021
 traceback:			equ $0024
 len:				equ $0028
-blockdevice.read:	equ $002B
-blockdevice.write:	equ $002E
-blockdevice.set_address: equ $0031
+blockdevice.read:		equ $002B
+blockdevice.write:		equ $002E
+blockdevice.set_address:	equ $0031
 yield:				equ $0038 ; Z80 interrupt mode 1 vector
 hex_to_int:			equ $003B
-byte_to_hex:		equ $003E
-hex_to_byte:		equ $0041
+byte_to_hex:			equ $003E
+hex_to_byte:			equ $0041
 
 ; G00nOS specific jumps:
-
 
 _entry:				equ $9100
 input:				equ $9103
 gfx_fill:			equ $9106
-gfx_newline:		equ $9109
+gfx_newline:			equ $9109
 gfx_indent:			equ $910C

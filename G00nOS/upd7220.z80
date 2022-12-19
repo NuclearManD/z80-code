@@ -1,592 +1,708 @@
 
-pipeserver_port: equ $90	; for reading from the keyboard
+pipeserver_port:	equ	$90	; for reading from the keyboard
 
-XRES: equ 408		; maximum resolution with 64KiB VRAM is 408x320
-YRES: equ 320
+XRES:			equ	408		; maximum resolution with 64KiB VRAM is 408x320
+YRES: 			equ	320
 
-VRAM_WORDS: equ horiz_words*YRES
+VRAM_WORDS:		equ	horiz_words*YRES
 
-font_ptr: equ rom_font ;equ $0000
-horiz_words: equ XRES/4
+font_ptr:		equ	rom_font ;equ	$0000
+horiz_words:		equ	XRES/4
 
-text_cursor_x: db 0
-text_cursor_y: db 0
+text_cursor_x:		db	0
+text_cursor_y:		db	0
 
-maximum_x: equ horiz_words/2 - 1
+maximum_x: 		equ	horiz_words/2 - 1
 
-HSYNC_WIDTH:	equ 15
-HFP_WIDTH:		equ 21
-HBP_WIDTH:		equ 8
+HSYNC_WIDTH:		equ	15
+HFP_WIDTH:		equ	21
+HBP_WIDTH:		equ	8
 
-VSYNC_LINES:	equ 3		; 2 for 488x400
-VFP_LINES:		equ 63		; 12 for 488x400
-VBP_LINES:		equ 63		; 35 for 488x400
+VSYNC_LINES:		equ	3		; 2 for 488x400
+VFP_LINES:		equ	63		; 12 for 488x400
+VBP_LINES:		equ	63		; 35 for 488x400
 
+SYNC_P3_CFG:		equ	(VSYNC_LINES*32)+(HSYNC_WIDTH-1)
+SYNC_P4_CFG:		equ	(VSYNC_LINES/4)+(4*(HFP_WIDTH-1))
+SYNC_P8_CFG:		equ	(VBP_LINES*4) + (YRES/256)
 
-SYNC_P3_CFG: equ (VSYNC_LINES*32)+(HSYNC_WIDTH-1)
-SYNC_P4_CFG: equ (VSYNC_LINES/4)+(4*(HFP_WIDTH-1))
-SYNC_P8_CFG: equ (VBP_LINES*4) + (YRES/256)
+text_rows:		equ	20
+free_text_rows:		equ	text_rows-3
 
-text_rows:		equ 20
-free_text_rows:	equ text_rows-3
-
-hex_table:
-db "0123456789ABCDEF",0
+hex_table:	db	"0123456789ABCDEF",0
 
 gfx_text_curs_to_word: ; uses text_cursor value
-	push bc
-	push de
 
-	ld a, (text_cursor_y) ; multiply y value by 8 and store in de
+	push	bc
+	push	de
+
+	ld	a,(text_cursor_y) 	; multiply y value by 8 and	store in	de
 	rlca
 	rlca
 	rlca
-	push af
-	and $F8
-	ld l, a
-	pop af
-	and $07
-	ld h, a
-	ld d, 0
-	ld a, (text_cursor_y)
-	add a ; add another pixel (multiply by 10)
-	ld e, a
-	add hl, de
-	ex de, hl
-	
-	
-	ld a, horiz_words		; multiply by the horizontal word count and store in hl
-	call mult_de_a			; mult_de_a also sets b to zero for us
-	
-	ld a, (text_cursor_x)		; bit 7 should never be set, so this is an easy multiply by two.
+	push	af
+
+	and	$F8
+	ld	l,a
+
+	pop	af
+	and	$07
+
+	ld	h,a
+	ld	d,0
+	ld	a,(text_cursor_y)
+	add	a ; add	another pixel (multiply by 10)
+	ld	e,a
+	add	hl,de
+	ex	de,hl
+
+	ld	a,horiz_words		; multiply by the horizontal word count and	store in	hl
+	call	mult_de_a		; mult_de_a also sets b to zero for us
+
+	ld	a,(text_cursor_x)	; bit 7 should	never be set,so this is an easy multiply by two.
 	rlca
-	
-	ld c, a
-	add hl, bc				; there is the address in VRAM of our character!
-	
-	pop de
-	pop bc
+
+	ld	c,a
+	add	hl,bc			; there is the address in	VRAM of our character!
+
+	pop	de
+	pop	bc
 	ret
 
 wr_upd7220:
-	push bc
-	ld b, a
-	
+	push	bc
+	ld	b,a
+
 .lopen:
-	in a, ($80)
-	and 2
-	jp nz, .lopen
-	
-	ld a, c
-	or $80
-	ld c, a
-	ld a, b
-	out (c), a
-	pop bc
+	in	a,($80)
+	and	2
+	jp	nz,.lopen
+
+	ld	a,c
+	or	$80
+	ld	c,a
+	ld	a,b
+	out	(c),a
+	pop	bc
 	ret
 
 upd7220_setup: ; for 16Mhz clock.
-	ld c, 1
-	xor a
-	call wr_upd7220
-	dec c
-	ld a, $10
-	call wr_upd7220
-	ld a, horiz_words - 2
-	call wr_upd7220
-	ld a, SYNC_P3_CFG
-	call wr_upd7220
-	ld a, SYNC_P4_CFG
-	call wr_upd7220
-	ld a, HBP_WIDTH - 1
-	call wr_upd7220
-	ld a, VFP_LINES
-	call wr_upd7220
-	ld a, YRES - (YRES/256)*256
-	call wr_upd7220
-	ld a, SYNC_P8_CFG
-	call wr_upd7220
-	inc c
-	ld a, $6F
-	call wr_upd7220
-	ld a, $47
-	call wr_upd7220
-	dec c
-	ld a, horiz_words
-	call wr_upd7220
-	inc c
-	ld a, $70
-	call wr_upd7220
-	dec c
-	ld a, $00
-	call wr_upd7220
-	call wr_upd7220
-	ld a, $00
-	call wr_upd7220
-	ld a, $19
-	call wr_upd7220
-	inc c
-	ld a, $4B
-	call wr_upd7220
-	dec c
-	ld a, $00
-	call wr_upd7220
-	ld a, $c0
-	call wr_upd7220
-	
-	inc c
-	ld a, $46		; set zoom to 1 and graphics character/fill zoom to 1
-	call wr_upd7220
-	dec c
-	ld a, $00
-	call wr_upd7220
-	
-	inc c
-	ld a, $6B
-	call wr_upd7220
-	
-	ret
-	
+	ld	c,1
+	xor	a
+	call	wr_upd7220
+
+	dec	c
+	ld	a,$10
+	call	wr_upd7220
+
+	ld	a,horiz_words - 2
+	call	wr_upd7220
+
+	ld	a,SYNC_P3_CFG
+	call	wr_upd7220
+
+	ld	a,SYNC_P4_CFG
+	call	wr_upd7220
+
+	ld	a,HBP_WIDTH - 1
+	call	wr_upd7220
+
+	ld	a,VFP_LINES
+	call	wr_upd7220
+
+	ld	a,YRES - (YRES/256)*256
+	call	wr_upd7220
+
+	ld	a,SYNC_P8_CFG
+	call	wr_upd7220
+
+	inc	c
+	ld	a,$6F
+	call	wr_upd7220
+
+	ld	a,$47
+	call	wr_upd7220
+
+	dec	c
+	ld	a,horiz_words
+	call	wr_upd7220
+
+	inc	c
+	ld	a,$70
+	call	wr_upd7220
+
+	dec	c
+	ld	a,$00
+	call	wr_upd7220
+
+	call	wr_upd7220
+
+	ld	a,$00
+	call	wr_upd7220
+
+	ld	a,$19
+	call	wr_upd7220
+
+	inc	c
+	ld	a,$4B
+	call	wr_upd7220
+
+	dec	c
+	ld	a,$00
+	call	wr_upd7220
+
+	ld	a,$c0
+	call	wr_upd7220
+
+	inc	c
+	ld	a,$46			; set zoom to 1 and	graphics character/fill zoom to 1
+	call	wr_upd7220
+
+	dec	c
+	ld	a,$00
+	call	wr_upd7220
+
+	inc	c
+	ld	a,$6B
+	jp	wr_upd7220
+
 gfx_curs: ; set cursor position (hl is word)
-	push bc
-	
-	ld c, 1
-	ld a, $49
-	call wr_upd7220
-	dec c
-	ld a, l
-	call wr_upd7220
-	ld a, h
-	call wr_upd7220
-	xor a
-	call wr_upd7220
-	
-	pop bc
+	push	bc
+
+	ld	c,1
+	ld	a,$49
+	call	wr_upd7220
+
+	dec	c
+	ld	a,l
+	call	wr_upd7220
+
+	ld	a,h
+	call	wr_upd7220
+
+	xor	a
+	call	wr_upd7220
+
+	pop	bc
 	ret
-	
+
 gfx_mask: ; set mask (hl is mask)
-	push bc
-	
-	ld c, 1
-	ld a, $4A
-	call wr_upd7220
-	dec c
-	ld a, l
-	call wr_upd7220
-	ld a, h
-	call wr_upd7220
-	
-	pop bc
+	push	bc
+
+	ld	c,1
+	ld	a,$4A
+	call	wr_upd7220
+
+	dec	c
+	ld	a,l
+	call	wr_upd7220
+
+	ld	a,h
+	call	wr_upd7220
+
+	pop	bc
 	ret
-	
+
 gfx_unmask: ; set mask (hl is mask)
-	push bc
-	
-	ld c, 1
-	ld a, $4A
-	call wr_upd7220
-	dec c
-	ld a, $FF
-	call wr_upd7220
-	call wr_upd7220
-	
-	pop bc
+	push	bc
+
+	ld	c,1
+	ld	a,$4A
+	call	wr_upd7220
+
+	dec	c
+	ld	a,$FF
+	call	wr_upd7220
+
+	call	wr_upd7220
+
+	pop	bc
 	ret
-	
-gfx_fill: ; pattern in hl
-	push de
-	push bc
-	push hl
-	ld hl, 0
-	call gfx_curs
-	
-	dec hl ; 0-1 = $FFFF
-	call gfx_mask
-	
-	pop hl ; get back our pattern
-	
+
+gfx_fill: ; pattern in	hl
+	push	de
+	push	bc
+	push	hl
+
+	ld	hl,0
+	call	gfx_curs
+
+	dec	hl ; 0-1 = $FFFF
+	call	gfx_mask
+
+	pop	hl			; get back our pattern
+
 	; set up figure parameters
-	ld a, $4C
-	ld c, 1
-	call wr_upd7220
-	dec c
-	ld a, $02
-	call wr_upd7220
-	ld de, $3FFF
-	ld a, e
-	call wr_upd7220
-	ld a, d
-	call wr_upd7220
-	
+	ld	a,$4C
+	ld	c,1
+	call	wr_upd7220
+
+	dec	c
+	ld	a,$02
+	call	wr_upd7220
+
+	ld	de,$3FFF
+	ld	a,e
+	call	wr_upd7220
+
+	ld	a,d
+	call	wr_upd7220
+
 	; write pattern
-	inc c
-	ld a, $20
-	call wr_upd7220
-	dec c
-	ld a, l
-	call wr_upd7220
-	ld a, h
-	call wr_upd7220
-	
-	call gfx_wait_ready
-	
+	inc	c
+	ld	a,$20
+	call	wr_upd7220
+
+	dec	c
+	ld	a,l
+	call	wr_upd7220
+
+	ld	a,h
+	call	wr_upd7220
+
+	call	gfx_wait_ready
+
 	; subtract to get remaining words
-	
-	push hl
-	ld hl, VRAM_WORDS - 1
+
+	push	hl
+
+	ld	hl,VRAM_WORDS - 1
 	scf
 	ccf
-	sbc hl, de
-	ex de, hl
-	pop hl
-	
+	sbc	hl,de
+	ex	de,hl
+	pop	hl
+
 	; set up figure parameters again
-	ld a, $4C
-	ld c, 1
-	call wr_upd7220
-	dec c
-	ld a, $02
-	call wr_upd7220
-	ld a, e
-	call wr_upd7220
-	ld a, d
-	call wr_upd7220
-	
+	ld	a,$4C
+	ld	c,1
+	call	wr_upd7220
+
+	dec	c
+	ld	a,$02
+	call	wr_upd7220
+
+	ld	a,e
+	call	wr_upd7220
+
+	ld	a,d
+	call	wr_upd7220
+
 	; write pattern
-	inc c
-	ld a, $20
-	call wr_upd7220
-	dec c
-	ld a, l
-	call wr_upd7220
-	ld a, h
-	call wr_upd7220
-	
-	call gfx_wait_ready
-	
-	pop bc
-	pop de
+	inc	c
+	ld	a,$20
+	call	wr_upd7220
+
+	dec	c
+	ld	a,l
+	call	wr_upd7220
+
+	ld	a,h
+	call	wr_upd7220
+
+	call	gfx_wait_ready
+
+	pop	bc
+	pop	de
+
 	ret
-	
+
 gfx_clear:
-	push hl
-	ld hl, 0
-	call gfx_fill
-	xor a
-	ld (text_cursor_x), a
-	ld (text_cursor_y), a
-	pop hl
+	push	hl
+
+	ld	hl,0
+	call	gfx_fill
+
+	xor	a
+	ld	(text_cursor_x),a
+	ld	(text_cursor_y),a
+
+	pop	hl
+
 	ret
-	
+
 gfx_wchr: ; character in A
-	push bc
-	push hl
-	push de
-	push af
-	push af
-	
-	ld hl, $FFFF
-	call gfx_mask ; need to set all pixels
-	
+	push	bc
+	push	hl
+	push	de
+
+	push	af
+	push	af
+
+	ld	hl,$FFFF
+	call	gfx_mask		; need to set all pixels
+
 	; set up figure parameters
-	ld a, $4C
-	ld c, 1
-	call wr_upd7220
-	dec c
-	ld a, $02			; set drawing direction.
-	call wr_upd7220
-	xor a
-	call wr_upd7220		; writing one word, no more.  set this parameter to zero.
-	call wr_upd7220
-	
-	pop af
-	
+	ld	a,$4C
+	ld	c,1
+	call	wr_upd7220
+
+	dec	c
+	ld	a,$02			; set drawing direction.
+	call	wr_upd7220
+
+	xor	a
+	call	wr_upd7220		; writing one word,no more.  set this parameter to zero.
+
+	call	wr_upd7220
+
+	pop	af
+
 	; first calculate character memory location
 	rlca
 	rlca
 	rlca
-	push af
-	and $F8
-	ld l, a
-	pop af
-	and $07
-	ld h, a
-	
-	ld bc, font_ptr
-	add hl, bc
-	ex de, hl			; save location of character
-	
-	call gfx_text_curs_to_word
-	
-						; now VRAM location is in hl and de holds character location
-	
-	ld b, 8
+
+	push	af
+
+	and	$F8
+	ld	l,a
+
+	pop	af
+
+	and	$07
+	ld	h,a
+
+	ld	bc,font_ptr
+	add	hl,bc
+	ex	de,hl			; save location of character
+
+	call	gfx_text_curs_to_word
+
+	; now VRAM location is in	hl and	de holds character location
+
+	ld	b,8
 .wrloop:
-	call gfx_curs		; set cursor
-	
-	call gfx_unmask		; set mask to $FFFF
-	
-	ld a, (de)			; load
-	rla					; get the upper nibble
+	call	gfx_curs		; set cursor
+
+	call	gfx_unmask		; set mask to $FFFF
+
+	ld	a,(de)			; load
+
+	rla				; get the upper nibble
 	rla
 	rla
 	rla
 	rla
-	call .w4px			; write
-	rla					; get the lower nibble
+
+	call	.w4px			; write
+
+	rla				; get the lower nibble
 	rla
 	rla
 	rla
-	call .w4px			; write again
-	
-	inc de
-	push bc
-	ld bc, horiz_words	; we'll need to add this to hl to go to the next line.
-	add hl, bc
-	pop bc
-	
-	djnz .wrloop
-	
-	; character written, advance x counter
-	
-	call gfx_advance_cursor
-	
-	pop af
-	pop de
-	pop hl
-	pop bc
+
+	call	.w4px			; write again
+
+	inc	de
+
+	push	bc
+
+	ld	bc,horiz_words		; we'll need to add this to hl to go to the next line.
+	add	hl,bc
+	pop	bc
+
+	djnz	.wrloop
+
+	; character written,advance x counter
+
+	call	gfx_advance_cursor
+
+	pop	af
+	pop	de
+	pop	hl
+	pop	bc
+
 	ret
-	
-.w4px: ; write four pixels.  The lowest 4 bits of the A register will be used.  1 is dark green, 0 is black.  Set cursor before.
+
+.w4px: ; write four pixels.  The lowest 4 bits of the A register will be used.  1 is dark green,0 is black.  Set cursor before.
 	exx
-	push af
-	
-	and a, 15
-	ld l, a
+	push	af
+
+	and	a,15
+	ld	l,a
+
 	rrca
 	rrca
 	rrca
 	rrca
-	ld h, a
-	
+
+	ld	h,a
+
 	; write pattern
-	ld c, 1
-	ld a, $20
-	call wr_upd7220
-	dec c
-	ld a, l
-	call wr_upd7220
-	ld a, h
-	call wr_upd7220
-	
-	call gfx_wait_ready
-	
-	pop af
+	ld	c,1
+	ld	a,$20
+	call	wr_upd7220
+
+	dec	c
+	ld	a,l
+	call	wr_upd7220
+
+	ld	a,h
+	call	wr_upd7220
+
+	call	gfx_wait_ready
+
+	pop	af
 	exx
 	ret
 
 gfx_advance_cursor:
-	ld a, (text_cursor_x)
-	inc a
-	cp maximum_x
-	
-	jp z, gfx_newline
-	jp nc, gfx_newline
-	ld (text_cursor_x), a
+	ld	a,(text_cursor_x)
+	inc	a
+	cp	maximum_x
+
+	jr	z,gfx_newline
+	jr	nc,gfx_newline
+	ld	(text_cursor_x),a
 	ret
-	
+
 gfx_indent:
-	ld a, (text_cursor_x)
-	and 0x7C
-	cp maximum_x
-	
-	jp z, gfx_newline
-	jp nc, gfx_newline
-	add 4					; 4 spaces
-	ld (text_cursor_x), a
+	ld	a,(text_cursor_x)
+	and	0x7C
+	cp	maximum_x
+
+	jr	z,gfx_newline
+	jr	nc,gfx_newline
+
+	add	4			; 4 spaces
+	ld	(text_cursor_x),a
 	ret
 
 gfx_newline:
-	ld a, (text_cursor_y)
-	inc a
-	ld (text_cursor_y), a
-	xor a
-	ld (text_cursor_x), a
+	ld	a,(text_cursor_y)
+	inc	a
+	ld	(text_cursor_y),a
+	xor	a
+	ld	(text_cursor_x),a
 	ret
-	
+
 gfx_wait_ready:
-	push af
-.ready_loop:			; uPD can glitch out without this for some reason
-	in a, ($80)
-	and 12
-	cp 4
-	jp nz, .ready_loop
-	pop af
+	push	af
+.ready_loop:				; uPD can glitch out	without this for some reason
+	in	a,($80)
+	and	12
+	cp	4
+	jp	nz,.ready_loop
+	pop	af
 	ret
 
 print_memory:
-	push hl
-	push de
-	push bc
-	ld a, l
-	and $F0		; ensure that it is the beginning
-	ld l, a
-	ld a, ' '
-	call gfx_chr
-	call gfx_chr
-	call gfx_chr
-	call gfx_chr
-	ld a, '|'
-	call gfx_chr
-	push hl
-	ld hl, hex_table
+	push	hl
+	push	de
+	push	bc
+
+	ld	a,l
+	and	$F0			; ensure that it is the beginning
+	ld	l,a
+
+	ld	a,' '
+	call	gfx_chr
+
+	call	gfx_chr
+
+	call	gfx_chr
+
+	call	gfx_chr
+
+	ld	a,'|'
+	call	gfx_chr
+
+	push	hl
+
+	ld	hl,hex_table
 .write_head:
-	ld a, (hl)
-	or a
-	jr z, .write_done
-	inc hl
-	call gfx_chr
-	ld a, ' '
-	call gfx_chr
-	jp .write_head
+	ld	a,(hl)
+	or	a
+	jr	z,.write_done
+
+	inc	hl
+	call	gfx_chr
+
+	ld	a,' '
+	call	gfx_chr
+
+	jp	.write_head
+
 .write_done:
-	call gfx_newline
-	ld c, free_text_rows-1 ; number of rows to output
-	pop hl
+	call	gfx_newline
+	ld	c,free_text_rows-1 	; number of rows to output
+
+	pop	hl
+
 .row_start:
-	push hl
-	ld a, h
-	call byte_to_hex
-	ex de, hl
-	call gfx_print
-	pop hl
-	push hl
-	ld a, l
-	call byte_to_hex
-	ex de, hl
-	call gfx_print
-	ld a, '|'
-	call gfx_chr
-	pop hl
+
+	push	hl
+
+	ld	a,h
+	call	byte_to_hex
+
+	ex	de,hl
+	call	gfx_print
+
+	pop	hl
+	push	hl
+
+	ld	a,l
+	call	byte_to_hex
+
+	ex	de,hl
+	call	gfx_print
+
+	ld	a,'|'
+	call	gfx_chr
+
+	pop	hl
+
 .row_loop:
-	ld a, (hl)
-	push hl
-	call byte_to_hex
-	ex de, hl
-	call gfx_print
-	pop hl
-	inc hl
-	ld a, l
-	and $F
-	jr z, .row_loop_end
-	jp .row_loop
-	
+	ld	a,(hl)
+
+	push	hl
+
+	call	byte_to_hex
+
+	ex	de,hl
+	call	gfx_print
+
+	pop	hl
+
+	inc	hl
+	ld	a,l
+	and	$F
+	jr	nz,.row_loop
+
 .row_loop_end:
 
-	ld a, 13
-	call gfx_chr
-	dec c
-	ld a, c
-	or a
-	jp nz, .row_start
-	pop bc
-	pop de
-	pop hl
+	ld	a,13
+	call	gfx_chr
+
+	dec	c
+	ld	a,c
+	or	a
+	jr	nz,.row_start
+
+	pop	bc
+	pop	de
+	pop	hl
+
 	ret
 
-gfx_chr:
-	cp $0D
-	jp z, gfx_newline
-	cp $09
-	jp z, gfx_indent
-	cp $08
-	jp z, .backspace
-	jp gfx_wchr
+gfx_chr:cp	$0D
+	jp	z,gfx_newline
+
+	cp	$09
+	jp	z,gfx_indent
+
+	cp	$08
+	jp	nz,gfx_wchr
+
 .backspace:
-	ld a, (text_cursor_x)
-	or a
-	jp z, .chline
-	dec a
-	ld (text_cursor_x), a
-	push af
-	ld a, $20 ; write a space
-	call gfx_wchr
-	pop af
-	ld (text_cursor_x), a
+	ld	a,(text_cursor_x)
+	or	a
+	jr	z,.chline
+
+	dec	a
+	ld	(text_cursor_x),a
+
+	push	af
+
+	ld	a,$20 ; write a space
+	call	gfx_wchr
+
+	pop	af
+
+	ld	(text_cursor_x),a
 	ret
-.chline:
-	ld a, (text_cursor_y)
-	dec a
-	ld (text_cursor_y), a
+
+.chline:ld	a,(text_cursor_y)
+	dec	a
+	ld	(text_cursor_y),a
 	ret
 
 gfx_print:				; string in de
-	push de
-.lop:
-	ld a, (de)
-	or a
-	jp z, .done
-	inc de
-	call gfx_chr
-	jp .lop
-.done:
-	pop de
+	push	de
+
+.lop:	ld	a,(de)
+	or	a
+	jr	z,.done
+
+	inc	de
+	call	gfx_chr
+	jr	.lop
+
+.done:	pop	de
 	ret
-gfx_println:			; string in de
-	call gfx_print
-	call gfx_newline
+
+gfx_println:				; string in	de
+	call	gfx_print
+
+	call	gfx_newline
+
 gfx_pipe_available:
-	ld a, 1					; keyboard ID
-	out (pipeserver_port), a ; set device id
-	in a, (pipeserver_port)  ; read status register
-	and 2
+	ld	a,1			; keyboard ID
+	out	(pipeserver_port),a	; set device id
+
+	in	a,(pipeserver_port)  	; read status register
+	and	2
 	rra
 	ret
-gfx_pipe_read:
-	call gfx_pipe_available ; this will set the correct device ID
-	or a
-	jp z, .err
-	in a, (pipeserver_port+1)
-	ret
-db 0, "gfx_pipe_read", 0
-.err:
-	call throw
-	ret ; how would it return?  Idk, just in case.
 
-; If you are reading this as a reference for the uPD7220, the following is a
-; specific object structure for my OS and BIOS, and is not for the uPD7220.
+gfx_pipe_read:
+	call	gfx_pipe_available 	; this will set the correct device ID
+
+	or	a
+	jr	z,.err
+
+	in	a,(pipeserver_port+1)
+	ret
+
+db 0,"gfx_pipe_read",0
+
+.err:	call	throw
+	ret	; how would it return?  Idk,just in	case.
+
+; If you are reading this as a reference for the uPD7220,the following is a
+; specific object structure for my OS and BIOS,and is not for the uPD7220.
 gfx_pipe_obj:
 	db $00 ; normal pipe has 00 properties.
-	jp gfx_pipe_read
-	jp gfx_chr
-	jp gfx_pipe_available
-	jp gfx_print
-	jp gfx_println
-	
+
+	jp	gfx_pipe_read
+	jp	gfx_chr
+	jp	gfx_pipe_available
+	jp	gfx_print
+	jp	gfx_println
 
 ; read a line from the keyboard
-input:
-	push hl
-.lopen:
-	call chrin
-	push af
-	call gfx_chr
-	pop af
-	cp 8
-	jp z, .delete
-	out (0), a
-	cp 13
-	jp z, .done
-	ld (hl), a
-	inc hl
-	cp CTRL_C
-	jp z, .done
-	jp .lopen
-.delete:
-	dec hl
-	jr .lopen
-.done:
-	xor a
-	ld (hl), a
-	pop hl
+input:	push	hl
+
+.lopen:	call	chrin
+
+	push	af
+
+	call	gfx_chr
+
+	pop	af
+
+	cp	8
+	jr	z,.delete
+
+	out	(0),a
+	cp	13
+	jr	z,.done
+
+	ld	(hl),a
+	inc	hl
+	cp	CTRL_C
+	jr	z,.done
+
+	jr	.lopen
+
+.delete:dec	hl
+	jr	.lopen
+
+.done:	xor	a
+	ld	(hl),a
+
+	pop	hl
+
 	ret
